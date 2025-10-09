@@ -17,6 +17,8 @@ module.exports = function (api) {
           allowUndefined: true,
         },
       ],
+      // Temporarily commented out to fix build issue
+      // 'react-native-reanimated/plugin', // This must be last
     ],
   };
 };

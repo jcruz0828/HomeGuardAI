@@ -25,6 +25,7 @@ import { faceEnrollmentService } from '../../services/people-management/FaceEnro
 import { PersonResponse } from '../../services/people-management/PersonService';
 import { HomePersonResponse } from '../../services/people-management/HomePersonService';
 import * as ImagePicker from 'expo-image-picker';
+import Avatar from '../../components/Avatar';
 
 const { width } = Dimensions.get('window');
 
@@ -268,17 +269,21 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
   };
 
   const getPersonTypeColor = (type: string) => {
-    switch (type) {
-      case 'FAMILY_MEMBER': return '#4CAF50';
-      case 'REGULAR_GUEST': return '#2196F3';
-      case 'SERVICE_WORKER': return '#FF9800';
-      case 'DELIVERY_PERSON': return '#FF5722';
-      case 'MAINTENANCE': return '#9C27B0';
-      case 'VISITOR': return '#607D8B';
-      case 'UNKNOWN': return '#9E9E9E';
-      default: return '#9E9E9E';
+    // Ensure we have a valid type
+    const personType = type || 'UNKNOWN';
+    
+    switch (personType.toUpperCase()) {
+      case 'FAMILY_MEMBER': return '#4CAF50'; // Green
+      case 'REGULAR_GUEST': return '#2196F3'; // Blue
+      case 'SERVICE_WORKER': return '#FF9800'; // Orange
+      case 'DELIVERY_PERSON': return '#FF5722'; // Red-Orange
+      case 'MAINTENANCE': return '#9C27B0'; // Purple
+      case 'VISITOR': return '#607D8B'; // Blue-Grey
+      case 'UNKNOWN': return '#9E9E9E'; // Grey
+      default: return '#9E9E9E'; // Default grey
     }
   };
+
 
   const handlePersonPress = async (person: HomePersonResponse) => {
     setSelectedPerson(person);
@@ -528,29 +533,19 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
         ) : (
           <View className="px-6 py-4">
             {people.map((person) => (
-              <TouchableOpacity 
-                key={person.id} 
-                onPress={() => handlePersonPress(person)}
-                className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}
-              >
+                <TouchableOpacity 
+                  key={person.id} 
+                  onPress={() => handlePersonPress(person)}
+                  className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}
+                >
                 <View className="flex-row items-center">
-                  <View className="w-12 h-12 rounded-full overflow-hidden mr-4">
-                    {person.person?.profileImagePath ? (
-                      <Image 
-                        source={{ uri: person.person.profileImagePath }} 
-                        className="w-full h-full"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View 
-                        className="w-full h-full items-center justify-center"
-                        style={{ backgroundColor: getPersonTypeColor(person.person?.personType || '') }}
-                      >
-                        <Text className="text-white font-semibold text-lg">
-                          {person.person?.name?.charAt(0) || '?'}
-                        </Text>
-                      </View>
-                    )}
+                  <View className="mr-4">
+                    <Avatar
+                      size="medium"
+                      imageUri={person.person?.profileImagePath}
+                      name={person.person?.name || 'Unknown'}
+                      personType={person.person?.personType || 'UNKNOWN'}
+                    />
                   </View>
                   
                   <View className="flex-1">
@@ -823,24 +818,14 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
             <ScrollView className="flex-1 px-6 py-4">
               {/* Person Photo */}
               <View className="items-center mb-6">
-                <View className="w-32 h-32 rounded-full overflow-hidden mb-4">
-                  {selectedPerson.person?.profileImagePath ? (
-                    <Image 
-                      source={{ uri: selectedPerson.person.profileImagePath }} 
-                      className="w-full h-full"
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View 
-                      className="w-full h-full items-center justify-center"
-                      style={{ backgroundColor: getPersonTypeColor(selectedPerson.person?.personType || '') }}
-                    >
-                      <Text className="text-white font-bold text-4xl">
-                        {selectedPerson.person?.name?.charAt(0) || '?'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                <Avatar
+                  size="xlarge"
+                  imageUri={selectedPerson.person?.profileImagePath}
+                  name={selectedPerson.person?.name || 'Unknown'}
+                  personType={selectedPerson.person?.personType || 'UNKNOWN'}
+                  showBorder={true}
+                  borderColor={isDark ? '#374151' : '#e5e7eb'}
+                />
                 <Text className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                   {selectedPerson.person?.name || 'Unknown'}
                 </Text>

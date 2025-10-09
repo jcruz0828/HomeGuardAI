@@ -25,6 +25,9 @@ export type MainStackParamList = {
   GlobalActivities: undefined; // Global activities from all homes
   // Device Management
   DeviceManagement: { home: any };
+  AllHomesDevices: undefined; // All devices across all homes
+  // Requests
+  QueuedRequests: undefined; // Queued access requests
   // Security Controls
   DeadboltControl: { home: any };
   FaceDetection: { home: any };

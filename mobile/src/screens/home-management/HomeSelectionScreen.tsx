@@ -93,11 +93,11 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
   ]);
 
   const [showActivityModal, setShowActivityModal] = useState(false);
-  const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showActivityDetailModal, setShowActivityDetailModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<HomeActivity | null>(null);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
+
 
   // Convert API response to Home type
   const convertApiResponseToHome = useCallback((apiHome: HomeResponse): Home => {
@@ -145,6 +145,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
     }
   }, [user?.id, convertApiResponseToHome]);
 
+
   // Load activities for all homes
   const loadActivities = useCallback(async (forceRefresh = false) => {
     if (!user?.id || homes.length === 0) return;
@@ -183,6 +184,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
       loadActivities();
     }
   }, [homes, loadActivities]);
+
 
   // Auto-refresh activities every 30 seconds
   useEffect(() => {
@@ -271,23 +273,6 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
     }
   };
 
-  const handleRequestAction = (requestId: string, action: 'approve' | 'deny') => {
-    Alert.alert(
-      action === 'approve' ? 'Approve Request' : 'Deny Request',
-      `Are you sure you want to ${action} this request?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: action === 'approve' ? 'Approve' : 'Deny', 
-          style: action === 'approve' ? 'default' : 'destructive',
-          onPress: () => {
-            // Handle request approval/denial
-            Alert.alert('Success', `Request ${action}d successfully`);
-          }
-        }
-      ]
-    );
-  };
 
   const handleActivityAction = async (activityId: string, action: 'acknowledge' | 'dismiss' | 'investigate') => {
     if (!user?.id) return;
@@ -332,6 +317,30 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
   const toggleRequestExpansion = (requestId: string) => {
     setExpandedRequest(expandedRequest === requestId ? null : requestId);
   };
+
+  const handleRequestAction = (requestId: string, action: 'approve' | 'deny') => {
+    Alert.alert(
+      action === 'approve' ? 'Approve Request' : 'Deny Request',
+      `Are you sure you want to ${action} this request?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: action === 'approve' ? 'Approve' : 'Deny', 
+          style: action === 'approve' ? 'default' : 'destructive',
+          onPress: () => {
+            // Update request status optimistically
+            setQueuedRequests(prev => prev.map(request => 
+              request.id === requestId 
+                ? { ...request, status: action === 'approve' ? 'approved' : 'denied' }
+                : request
+            ));
+            Alert.alert('Success', `Request ${action}d successfully`);
+          }
+        }
+      ]
+    );
+  };
+
 
   const getPriorityColor = (priority: string) => {
     switch (priority.toUpperCase()) {
@@ -552,7 +561,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
               className={`flex-1 p-4 rounded-xl ml-2 ${
                 isDark ? 'bg-neutral-800' : 'bg-white'
               }`}
-              onPress={() => setShowRequestsModal(true)}
+              onPress={() => navigation.navigate('QueuedRequests')}
             >
               <Ionicons 
                 name="list" 
@@ -592,18 +601,18 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
               className={`flex-1 p-4 rounded-xl ml-2 ${
                 isDark ? 'bg-neutral-800' : 'bg-white'
               }`}
-              onPress={() => Alert.alert('All Homes', 'Global home management coming soon!')}
+              onPress={() => navigation.navigate('AllHomesDevices')}
             >
               <Ionicons 
-                name="home" 
+                name="hardware-chip" 
                 size={24} 
                 color={isDark ? '#8b5cf6' : '#7c3aed'} 
               />
               <Text className={`text-sm font-medium mt-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                All Homes
+                All Devices
               </Text>
               <Text className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Global control
+                Device control
               </Text>
             </TouchableOpacity>
           </View>
@@ -715,7 +724,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
             <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
               Queued Requests
             </Text>
-            <TouchableOpacity onPress={() => setShowRequestsModal(true)}>
+            <TouchableOpacity onPress={() => navigation.navigate('QueuedRequests')}>
               <Text className={`text-sm ${isDark ? 'text-primary-400' : 'text-primary-600'}`}>
                 View All
               </Text>
@@ -1035,143 +1044,6 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
         </View>
       </Modal>
 
-      {/* Queued Requests Modal */}
-      <Modal
-        visible={showRequestsModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowRequestsModal(false)}
-      >
-        <View className="flex-1 justify-end bg-black/50">
-          <View className={`rounded-t-3xl ${isDark ? 'bg-neutral-800' : 'bg-white'} p-6 max-h-96`}>
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                Queued Requests
-              </Text>
-              <TouchableOpacity onPress={() => setShowRequestsModal(false)}>
-                <Ionicons name="close" size={24} color={isDark ? '#ffffff' : '#000000'} />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {queuedRequests.map(request => (
-                <View key={request.id} className={`p-4 rounded-xl mb-3 ${
-                  isDark ? 'bg-neutral-700' : 'bg-neutral-100'
-                }`}>
-                  <TouchableOpacity 
-                    onPress={() => toggleRequestExpansion(request.id)}
-                    className="flex-row items-start"
-                  >
-                    <View className={`w-8 h-8 rounded-full items-center justify-center mr-3 ${
-                      isDark ? 'bg-primary-600' : 'bg-primary-500'
-                    }`}>
-                      <Ionicons 
-                        name={getTypeIcon(request.type) as any} 
-                        size={16} 
-                        color="white" 
-                      />
-                    </View>
-                    <View className="flex-1">
-                      <Text className={`font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                        {request.personName}
-                      </Text>
-                      <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                        {request.type.charAt(0).toUpperCase() + request.type.slice(1)} at {request.location}
-                      </Text>
-                      {request.message && (
-                        <Text className={`text-sm ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                          "{request.message}"
-                        </Text>
-                      )}
-                      <Text className={`text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
-                        {request.homeName} • {request.timestamp}
-                      </Text>
-                    </View>
-                    <View className="flex-row items-center">
-                      <View className={`px-2 py-1 rounded-full mr-2 ${
-                        request.status === 'pending' 
-                          ? (isDark ? 'bg-yellow-600' : 'bg-yellow-500')
-                          : request.status === 'approved'
-                          ? (isDark ? 'bg-green-600' : 'bg-green-500')
-                          : (isDark ? 'bg-red-600' : 'bg-red-500')
-                      }`}>
-                        <Text className="text-xs font-medium text-white">
-                          {request.status}
-                        </Text>
-                      </View>
-                      <Ionicons 
-                        name={expandedRequest === request.id ? "chevron-up" : "chevron-down"} 
-                        size={16} 
-                        color={isDark ? '#a3a3a3' : '#737373'} 
-                      />
-                    </View>
-                  </TouchableOpacity>
-                  
-                  {/* Expanded Request Actions in Modal */}
-                  {expandedRequest === request.id && (
-                    <View className="mt-4 pt-4 border-t border-neutral-600">
-                      <View className="flex-row justify-between mb-3">
-                        <Text className={`text-sm font-medium ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                          Actions
-                        </Text>
-                        <Text className={`text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
-                          {request.type.toUpperCase()}
-                        </Text>
-                      </View>
-                      
-                      {request.status === 'pending' ? (
-                        <View>
-                          <TouchableOpacity 
-                            className={`w-full py-4 px-6 rounded-2xl mb-4 ${
-                              isDark ? 'bg-green-600' : 'bg-green-500'
-                            }`}
-                            onPress={() => handleRequestAction(request.id, 'approve')}
-                            style={{ shadowColor: '#10b981', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }}
-                          >
-                            <View className="flex-row items-center justify-center">
-                              <Ionicons name="checkmark-circle" size={20} color="white" />
-                              <Text className="text-white text-base font-semibold ml-3">
-                                Approve
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity 
-                            className={`w-full py-4 px-6 rounded-2xl ${
-                              isDark ? 'bg-red-600' : 'bg-red-500'
-                            }`}
-                            onPress={() => handleRequestAction(request.id, 'deny')}
-                            style={{ shadowColor: '#ef4444', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 }}
-                          >
-                            <View className="flex-row items-center justify-center">
-                              <Ionicons name="close-circle" size={20} color="white" />
-                              <Text className="text-white text-base font-semibold ml-3">
-                                Deny
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <View className="flex-row items-center justify-center py-2">
-                          <View className={`px-3 py-1 rounded-full ${
-                            request.status === 'approved' 
-                              ? (isDark ? 'bg-green-600' : 'bg-green-500')
-                              : (isDark ? 'bg-red-600' : 'bg-red-500')
-                          }`}>
-                            <Text className="text-white text-xs font-medium">
-                              {request.status === 'approved' ? '✓ Approved' : '✗ Denied'}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Activity Detail Modal */}
       <Modal
@@ -1328,6 +1200,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 };

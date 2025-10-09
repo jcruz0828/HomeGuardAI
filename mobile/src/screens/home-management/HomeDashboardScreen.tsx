@@ -69,7 +69,6 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
     );
   }
   
-  const [isArmed, setIsArmed] = useState(home.isArmed);
   const [cameraStatus, setCameraStatus] = useState('online');
   
   // Activity states
@@ -193,15 +192,6 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
     }
   };
 
-  const toggleArmed = () => {
-    setIsArmed(!isArmed);
-    Alert.alert(
-      isArmed ? 'System Disarmed' : 'System Armed',
-      isArmed 
-        ? 'Your security system has been disarmed' 
-        : 'Your security system is now armed and monitoring'
-    );
-  };
 
   const handleSecuritySettings = () => {
     navigation.navigate('SecuritySettings', { home });
@@ -375,36 +365,7 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
       </View>
 
       <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
-        {/* System Status */}
-        <View className="mb-6">
-          <Text className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-            System Status
-          </Text>
-          
-          <SecurityStatusCard
-            title="Security System"
-            status={isArmed ? "Armed" : "Disarmed"}
-            icon="shield-checkmark"
-            color={isArmed ? "bg-success" : "bg-error"}
-            onPress={toggleArmed}
-          />
-          
-          <SecurityStatusCard
-            title="Camera System"
-            status={cameraStatus === 'online' ? "Online" : "Offline"}
-            icon="videocam"
-            color={cameraStatus === 'online' ? "bg-primary-500" : "bg-error"}
-            onPress={() => setCameraStatus(cameraStatus === 'online' ? 'offline' : 'online')}
-          />
-          
-          <SecurityStatusCard
-            title="Security Settings"
-            status="Configure"
-            icon="settings"
-            color="bg-neutral-600"
-            onPress={handleSecuritySettings}
-          />
-        </View>
+       
 
         {/* Live Camera Feed */}
         <View className="mb-6">
@@ -440,25 +401,10 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
           
           <View className="flex-row mb-4">
             <QuickActionButton
-              title="Arm System"
-              icon="shield-checkmark"
-              color={isArmed ? "bg-error" : "bg-success"}
-              onPress={toggleArmed}
-            />
-            <QuickActionButton
               title="Devices"
               icon="hardware-chip"
               color="bg-primary-500"
               onPress={() => navigation.navigate('DeviceManagement', { home })}
-            />
-          </View>
-          
-          <View className="flex-row mb-4">
-            <QuickActionButton
-              title="Deadbolts"
-              icon="lock-closed"
-              color="bg-warning"
-              onPress={() => navigation.navigate('DeadboltControl', { home })}
             />
             <QuickActionButton
               title="Face Recognition"
@@ -470,10 +416,10 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
           
           <View className="flex-row mb-4">
             <QuickActionButton
-              title="RFID Cards"
-              icon="card"
-              color="bg-red-500"
-              onPress={() => navigation.navigate('RFIDManagement', { home })}
+              title="Deadbolts"
+              icon="lock-closed"
+              color="bg-warning"
+              onPress={() => navigation.navigate('DeadboltControl', { home })}
             />
             <QuickActionButton
               title="Access Logs"
@@ -482,6 +428,7 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
               onPress={() => navigation.navigate('AccessLogs', { home })}
             />
           </View>
+          
           
           <View className="flex-row">
             <QuickActionButton
@@ -499,15 +446,7 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
           </View>
         </View>
 
-        {/* Devices */}
-        <View className="mb-6">
-          <Text className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-            Devices ({devices.length})
-          </Text>
-          {devices.map(device => (
-            <DeviceCard key={device.id} device={device} />
-          ))}
-        </View>
+      
 
         {/* Recent Activities */}
         <View className="mb-6">

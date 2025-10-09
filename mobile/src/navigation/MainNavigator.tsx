@@ -13,6 +13,8 @@ import ManagePeopleScreen from '../screens/people-management/ManagePeopleScreen'
 import RecentActivitiesScreen from '../screens/activities/RecentActivitiesScreen';
 import GlobalActivitiesScreen from '../screens/activities/GlobalActivitiesScreen';
 import DeviceManagementScreen from '../screens/device-management/DeviceManagementScreen';
+import AllHomesDevicesScreen from '../screens/device-management/AllHomesDevicesScreen';
+import QueuedRequestsScreen from '../screens/requests/QueuedRequestsScreen';
 import DeadboltControlScreen from '../screens/security-access/DeadboltControlScreen';
 import FaceDetectionScreen from '../screens/security-access/FaceDetectionScreen';
 import RFIDManagementScreen from '../screens/security-access/RFIDManagementScreen';
@@ -112,6 +114,20 @@ const MainNavigator: React.FC = () => {
       <Stack.Screen 
         name="DeviceManagement" 
         component={DeviceManagementScreen}
+        options={{
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen 
+        name="AllHomesDevices" 
+        component={AllHomesDevicesScreen}
+        options={{
+          gestureEnabled: true,
+        }}
+      />
+      <Stack.Screen 
+        name="QueuedRequests" 
+        component={QueuedRequestsScreen}
         options={{
           gestureEnabled: true,
         }}

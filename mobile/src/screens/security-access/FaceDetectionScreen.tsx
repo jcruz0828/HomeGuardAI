@@ -17,6 +17,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
 import { homePersonService } from '../../services/people-management/HomePersonService';
 import { HomePersonResponse } from '../../services/people-management/HomePersonService';
+import Avatar from '../../components/Avatar';
 
 interface FaceProfile {
   id: string;
@@ -195,24 +196,13 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
         : 'bg-white border-neutral-200'
     }`}>
       <View className="flex-row items-start mb-4">
-        <View className="w-16 h-16 rounded-full overflow-hidden mr-4">
-          {person.profileImagePath ? (
-            <Image 
-              source={{ uri: person.profileImagePath }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className={`w-full h-full items-center justify-center ${
-              isDark ? 'bg-neutral-700' : 'bg-neutral-200'
-            }`}>
-              <Ionicons 
-                name="person" 
-                size={24} 
-                color={isDark ? '#a3a3a3' : '#737373'} 
-              />
-            </View>
-          )}
+        <View className="mr-4">
+          <Avatar
+            size="large"
+            imageUri={person.profileImagePath}
+            name={person.name || 'Unknown'}
+            personType={person.personType || 'UNKNOWN'}
+          />
         </View>
         <View className="flex-1">
           <View className="flex-row justify-between items-start">
