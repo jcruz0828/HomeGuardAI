@@ -10,6 +10,7 @@ Welcome to the HomeGuard AI documentation. This comprehensive guide covers all a
 4. **[ML Service](./ML_SERVICE.md)** - Python face recognition service
 5. **[Edge Device](./EDGE_DEVICE.md)** - Raspberry Pi edge device setup
 6. **[Setup Guide](./SETUP.md)** - Installation and configuration instructions
+7. **[HomeGuard V2 Proposal](./HOMEGUARD_V2_PROPOSAL.md)** - Next-generation product proposal and requirements
 
 ## 🏠 What is HomeGuard AI?
 
