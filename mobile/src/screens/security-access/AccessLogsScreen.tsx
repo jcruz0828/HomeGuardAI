@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -8,18 +8,21 @@ import {
   Alert,
   Modal,
   TextInput,
-  FlatList
+  FlatList,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
+import { accessLogService, AccessLogResponse } from '../../services/security/AccessLogService';
 
 interface AccessLog {
   id: string;
   timestamp: string;
   personName: string;
-  accessType: 'face' | 'rfid' | 'app' | 'manual';
+  accessType: 'face' | 'rfid' | 'app' | 'manual' | 'lock' | 'unlock' | 'emergency' | 'admin';
   result: 'granted' | 'denied' | 'error';
   location: string;
   deviceName: string;
@@ -42,77 +45,144 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
   const { user } = useUser();
   const { home } = route.params;
   
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([
-    {
-      id: '1',
-      timestamp: '2024-01-15 14:30:25',
-      personName: 'John Doe',
-      accessType: 'face',
-      result: 'granted',
-      location: 'Front Door',
-      deviceName: 'Main Door Controller',
-      confidence: 95,
-      notes: 'Successful face recognition'
-    },
-    {
-      id: '2',
-      timestamp: '2024-01-15 14:25:10',
-      personName: 'Jane Smith',
-      accessType: 'rfid',
-      result: 'granted',
-      location: 'Back Door',
-      deviceName: 'Back Door Controller',
-      cardNumber: 'RFID-002-DEF456',
-      notes: 'RFID card access'
-    },
-    {
-      id: '3',
-      timestamp: '2024-01-15 14:20:45',
-      personName: 'Unknown Person',
-      accessType: 'face',
-      result: 'denied',
-      location: 'Front Door',
-      deviceName: 'Main Door Controller',
-      confidence: 45,
-      notes: 'Low confidence match'
-    },
-    {
-      id: '4',
-      timestamp: '2024-01-15 14:15:30',
-      personName: 'John Doe',
-      accessType: 'app',
-      result: 'granted',
-      location: 'Garage Door',
-      deviceName: 'Garage Controller',
-      notes: 'Mobile app unlock'
-    },
-    {
-      id: '5',
-      timestamp: '2024-01-15 14:10:15',
-      personName: 'Maintenance Team',
-      accessType: 'rfid',
-      result: 'granted',
-      location: 'Service Entrance',
-      deviceName: 'Service Door Controller',
-      cardNumber: 'RFID-004-JKL012',
-      notes: 'Service access'
-    },
-    {
-      id: '6',
-      timestamp: '2024-01-15 14:05:00',
-      personName: 'System',
-      accessType: 'manual',
-      result: 'granted',
-      location: 'Front Door',
-      deviceName: 'Main Door Controller',
-      notes: 'Emergency override'
-    }
-  ]);
-
-  const [filteredLogs, setFilteredLogs] = useState<AccessLog[]>(accessLogs);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'granted' | 'denied' | 'face' | 'rfid' | 'app'>('all');
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
+  const [filteredLogs, setFilteredLogs] = useState<AccessLog[]>([]);
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'granted' | 'denied' | 'face' | 'rfid' | 'app' | 'lock' | 'unlock'>('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Map backend access type to frontend type
+  const mapAccessType = (type: string): AccessLog['accessType'] => {
+    switch (type) {
+      case 'FACIAL_RECOGNITION': return 'face';
+      case 'RFID': return 'rfid';
+      case 'MOBILE_APP': return 'app';
+      case 'MANUAL_OVERRIDE': return 'manual';
+      case 'LOCK': return 'lock';
+      case 'UNLOCK': return 'unlock';
+      case 'EMERGENCY': return 'emergency';
+      case 'ADMIN_OVERRIDE': return 'admin';
+      default: return 'face';
+    }
+  };
+
+  // Map backend result to frontend result
+  const mapResult = (result: string): AccessLog['result'] => {
+    switch (result) {
+      case 'GRANTED': return 'granted';
+      case 'DENIED': return 'denied';
+      case 'ERROR': return 'error';
+      case 'TIMEOUT': return 'error';
+      case 'MANUAL_REQUIRED': return 'error';
+      default: return 'denied';
+    }
+  };
+
+  // Format timestamp
+  const formatTimestamp = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  // Convert backend response to frontend format
+  const convertToAccessLog = (log: AccessLogResponse): AccessLog => {
+    return {
+      id: log.id,
+      timestamp: formatTimestamp(log.createdAt),
+      personName: log.personName || log.userName || 'Unknown',
+      accessType: mapAccessType(log.accessType),
+      result: mapResult(log.result),
+      location: log.location || log.homeName || 'Unknown Location',
+      deviceName: log.deviceName || 'Unknown Device',
+      confidence: log.confidence,
+      notes: log.reason,
+    };
+  };
+
+  // Load access logs
+  const loadAccessLogs = useCallback(async (isRefresh = false) => {
+    if (!home?.id) return;
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+        setPage(0);
+        setHasMore(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      const currentPage = isRefresh ? 0 : page;
+      const response = await accessLogService.getAccessLogsByHomeId(home.id, currentPage, 50);
+      
+      const convertedLogs = response.content.map(convertToAccessLog);
+
+      if (isRefresh) {
+        setAccessLogs(convertedLogs);
+      } else {
+        setAccessLogs(prev => [...prev, ...convertedLogs]);
+      }
+
+      setHasMore(response.number < response.totalPages - 1);
+      if (!isRefresh) {
+        setPage(prev => prev + 1);
+      }
+    } catch (err: any) {
+      console.error('Error loading access logs:', err);
+      setError(err.message || 'Failed to load access logs');
+      Alert.alert('Error', err.message || 'Failed to load access logs');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [home?.id, page]);
+
+  useEffect(() => {
+    // For testing: Add a static mock log
+    const mockLog: AccessLog = {
+      id: 'mock-log-001',
+      timestamp: '2m ago',
+      personName: 'John Doe',
+      accessType: 'face',
+      result: 'granted',
+      location: '123 Main St, Anytown, ST 12345',
+      deviceName: 'Front Door Camera',
+      confidence: 92.5,
+      notes: 'Person recognized with high confidence'
+    };
+    setAccessLogs([mockLog]);
+    setFilteredLogs([mockLog]);
+    setLoading(false);
+    
+    // Uncomment to load real data:
+    // loadAccessLogs();
+  }, [home?.id]);
 
   useEffect(() => {
     let filtered = accessLogs;
@@ -153,6 +223,10 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
       case 'rfid': return 'card';
       case 'app': return 'phone-portrait';
       case 'manual': return 'hand';
+      case 'lock': return 'lock-closed';
+      case 'unlock': return 'lock-open';
+      case 'emergency': return 'warning';
+      case 'admin': return 'shield';
       default: return 'key';
     }
   };
@@ -163,6 +237,10 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
       case 'rfid': return isDark ? '#10b981' : '#059669';
       case 'app': return isDark ? '#8b5cf6' : '#7c3aed';
       case 'manual': return isDark ? '#f59e0b' : '#d97706';
+      case 'lock': return isDark ? '#ef4444' : '#dc2626';
+      case 'unlock': return isDark ? '#10b981' : '#059669';
+      case 'emergency': return isDark ? '#f59e0b' : '#d97706';
+      case 'admin': return isDark ? '#8b5cf6' : '#7c3aed';
       default: return isDark ? '#6b7280' : '#6b7280';
     }
   };
@@ -284,7 +362,9 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
                 { value: 'face', label: 'Face Recognition' },
                 { value: 'rfid', label: 'RFID Card' },
                 { value: 'app', label: 'Mobile App' },
-                { value: 'manual', label: 'Manual' }
+                { value: 'manual', label: 'Manual' },
+                { value: 'lock', label: 'Lock' },
+                { value: 'unlock', label: 'Unlock' }
               ].map((filter) => (
                 <TouchableOpacity
                   key={filter.value}
@@ -387,7 +467,17 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        className="flex-1 px-6" 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadAccessLogs(true)}
+            tintColor={isDark ? '#ffffff' : '#000000'}
+          />
+        }
+      >
         {/* Stats */}
         <View className="flex-row justify-between mb-6">
           <View className={`flex-1 p-4 rounded-xl mr-2 ${
@@ -423,7 +513,34 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
             </Text>
           </View>
           
-          {filteredLogs.length === 0 ? (
+          {loading && accessLogs.length === 0 ? (
+            <View className={`p-8 rounded-xl ${isDark ? 'bg-neutral-800' : 'bg-white'} items-center`}>
+              <ActivityIndicator size="large" color={isDark ? '#ffffff' : '#000000'} />
+              <Text className={`text-sm mt-4 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                Loading access logs...
+              </Text>
+            </View>
+          ) : error && accessLogs.length === 0 ? (
+            <View className={`p-8 rounded-xl ${isDark ? 'bg-neutral-800' : 'bg-white'} items-center`}>
+              <Ionicons 
+                name="alert-circle-outline" 
+                size={48} 
+                color={isDark ? '#ef4444' : '#dc2626'} 
+              />
+              <Text className={`text-lg font-medium mt-4 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                Error loading logs
+              </Text>
+              <Text className={`text-sm text-center mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                {error}
+              </Text>
+              <TouchableOpacity
+                className={`mt-4 px-6 py-3 rounded-xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'}`}
+                onPress={() => loadAccessLogs(true)}
+              >
+                <Text className="text-white font-medium">Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredLogs.length === 0 ? (
             <View className={`p-8 rounded-xl ${isDark ? 'bg-neutral-800' : 'bg-white'} items-center`}>
               <Ionicons 
                 name="document-text-outline" 
@@ -438,9 +555,21 @@ const AccessLogsScreen: React.FC<AccessLogsScreenProps> = ({ navigation, route }
               </Text>
             </View>
           ) : (
-            filteredLogs.map((log) => (
-              <AccessLogItem key={log.id} log={log} />
-            ))
+            <>
+              {filteredLogs.map((log) => (
+                <AccessLogItem key={log.id} log={log} />
+              ))}
+              {hasMore && !loading && (
+                <TouchableOpacity
+                  className={`p-4 rounded-xl mt-4 items-center ${isDark ? 'bg-neutral-800' : 'bg-white'}`}
+                  onPress={() => loadAccessLogs()}
+                >
+                  <Text className={`text-sm font-medium ${isDark ? 'text-primary-400' : 'text-primary-600'}`}>
+                    Load More
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </ScrollView>

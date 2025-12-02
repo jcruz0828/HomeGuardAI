@@ -21,11 +21,13 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(authz -> authz
+                // Allow public access to health endpoints
+                .requestMatchers("/api/v1/health").permitAll()
+                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
                 // Allow public access to user creation endpoints
                 .requestMatchers("/api/v1/users").permitAll()
                 .requestMatchers("/api/v1/users/**").permitAll()
-                // Allow public access to actuator endpoints for health checks
-                .requestMatchers("/actuator/**").permitAll()
                 // Allow all OPTIONS requests for CORS preflight
                 .requestMatchers("OPTIONS", "/**").permitAll()
                 // Require authentication for all other endpoints

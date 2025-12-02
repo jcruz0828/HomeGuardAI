@@ -60,7 +60,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
   }
 
   const [queuedRequests] = useState<QueuedRequest[]>([
-    {
+   /* {
       id: '1',
       timestamp: '1 minute ago',
       type: 'door_open',
@@ -89,7 +89,7 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
       location: 'Service Entrance',
       message: 'Scheduled maintenance access',
       status: 'approved'
-    }
+    } */
   ]);
 
   const [showActivityModal, setShowActivityModal] = useState(false);
@@ -731,7 +731,19 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
             </TouchableOpacity>
           </View>
           
-          {queuedRequests.slice(0, 2).map(request => (
+          {queuedRequests.length === 0 ? (
+            <View className="items-center py-4">
+              <Ionicons 
+                name="checkmark-circle" 
+                size={24} 
+                color={isDark ? '#10b981' : '#059669'} 
+              />
+              <Text className={`text-sm mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                No queued requests
+              </Text>
+            </View>
+          ) : (
+            queuedRequests.slice(0, 2).map(request => (
             <View key={request.id} className={`p-4 rounded-xl mb-3 ${
               isDark ? 'bg-neutral-800' : 'bg-white'
             }`}>
@@ -844,7 +856,8 @@ const HomeSelectionScreen: React.FC<HomeSelectionScreenProps> = ({ navigation })
                 </View>
               )}
             </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Homes List */}

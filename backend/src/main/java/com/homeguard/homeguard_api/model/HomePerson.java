@@ -43,4 +43,19 @@ public class HomePerson extends BaseEntity {
 
     @Column(name = "last_accessed")
     private LocalDateTime lastAccessed;
+
+    @Column(name = "automatic_access_enabled")
+    private Boolean automaticAccessEnabled = false;
+
+    @Column(name = "automatic_access_count")
+    private Integer automaticAccessCount = 0;
+
+    @Column(name = "automatic_access_limit")
+    private Integer automaticAccessLimit; // NULL = unlimited
+
+    @Column(name = "automatic_access_reset_period")
+    private String automaticAccessResetPeriod = "MONTHLY"; // DAILY, WEEKLY, MONTHLY, YEARLY, NEVER
+
+    @Column(name = "automatic_access_last_reset")
+    private LocalDateTime automaticAccessLastReset;
 }

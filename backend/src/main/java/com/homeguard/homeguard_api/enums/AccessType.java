@@ -6,5 +6,7 @@ public enum AccessType {
     MOBILE_APP,
     MANUAL_OVERRIDE,
     EMERGENCY,
-    ADMIN_OVERRIDE
+    ADMIN_OVERRIDE,
+    LOCK,
+    UNLOCK
 }

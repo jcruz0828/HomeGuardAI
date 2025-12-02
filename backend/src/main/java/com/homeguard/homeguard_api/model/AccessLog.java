@@ -29,8 +29,12 @@ public class AccessLog extends BaseEntity {
     private Person person; // null if unknown person
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id", nullable = false)
-    private Device device;
+    @JoinColumn(name = "device_id")
+    private Device device; // Can be null for home CRUD operations
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "home_id")
+    private Home home; // Direct home reference for CRUD operations
 
     @Enumerated(EnumType.STRING)
     @Column(name = "access_type", nullable = false)

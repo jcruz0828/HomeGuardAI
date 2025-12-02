@@ -21,5 +21,13 @@ public class HomePersonRequestDto {
     
     private String accessExpiresAt;
     
+    private Boolean isActive;
+    
     private String notes;
+    
+    private Boolean automaticAccessEnabled;
+    
+    private Integer automaticAccessLimit;
+    
+    private String automaticAccessResetPeriod; // DAILY, WEEKLY, MONTHLY, YEARLY, NEVER
 }

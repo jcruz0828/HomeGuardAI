@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { WebView } from 'react-native-webview';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
 import { Home, Device, AccessEvent } from '../../types/Home';
 import { homeActivityService, HomeActivity, ActivityCounts } from '../../services/home-management/HomeActivityService';
+import { API_CONFIG } from '../../config/api';
 
 interface HomeDashboardScreenProps {
   navigation: any;
@@ -70,6 +73,9 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
   }
   
   const [cameraStatus, setCameraStatus] = useState('online');
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [isStreamLoading, setIsStreamLoading] = useState(true);
+  const [useWebView, setUseWebView] = useState(false);
   
   // Activity states
   const [recentActivities, setRecentActivities] = useState<HomeActivity[]>([]);
@@ -77,67 +83,84 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
   const [loadingActivities, setLoadingActivities] = useState(false);
   const [showActivityDetailModal, setShowActivityDetailModal] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<HomeActivity | null>(null);
-
-  // Mock devices for this home
-  const [devices] = useState<Device[]>([
-    {
-      id: '1',
-      homeId: home.id,
-      name: 'Front Door Camera',
-      type: 'camera',
-      status: 'online',
-      location: 'Front Door',
-      isActive: true,
-      lastSeen: '2 minutes ago',
-      batteryLevel: 85
-    },
-    {
-      id: '2',
-      homeId: home.id,
-      name: 'Motion Sensor',
-      type: 'sensor',
-      status: 'online',
-      location: 'Living Room',
-      isActive: true,
-      lastSeen: '1 minute ago',
-      batteryLevel: 92
-    },
-    {
-      id: '3',
-      homeId: home.id,
-      name: 'Door Lock',
-      type: 'lock',
-      status: 'online',
-      location: 'Front Door',
-      isActive: true,
-      lastSeen: '5 minutes ago',
-      signalStrength: 85
+  
+  // Get stream URL for the specific home
+  const getStreamUrl = () => {
+    const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+    if (home.id === targetHomeId) {
+      const url = `${API_CONFIG.STREAM_BASE_URL}/stream?key=${API_CONFIG.STREAM_SECRET_KEY}`;
+      console.log('Stream URL:', url);
+      return url;
     }
-  ]);
-
-  // Mock recent events
-  const [recentEvents] = useState<AccessEvent[]>([
-    {
-      id: '1',
-      homeId: home.id,
-      deviceId: '1',
-      type: 'access',
-      timestamp: '2 hours ago',
-      personName: 'John Doe',
-      confidence: 95,
-      location: 'Front Door',
-      status: 'success'
-    },
-    {
-      id: '2',
-      homeId: home.id,
-      deviceId: '2',
-      type: 'motion',
-      timestamp: '4 hours ago',
-      location: 'Living Room',
-      status: 'success'
+    return null;
+  };
+  
+  const streamUrl = getStreamUrl();
+  
+  // Create video player for expo-video (only create if not using WebView fallback)
+  const player = useVideoPlayer(streamUrl && !useWebView ? streamUrl : '', (player) => {
+    if (streamUrl && !useWebView) {
+      player.loop = true;
+      player.play();
     }
-  ]);
+  });
+  
+  // Test stream URL accessibility on mount
+  useEffect(() => {
+    if (!streamUrl) return;
+    
+    // Test if URL is reachable
+    fetch(streamUrl, { method: 'HEAD', mode: 'no-cors' })
+      .then(() => {
+        console.log('Stream URL is reachable');
+      })
+      .catch((err) => {
+        console.warn('Stream URL might not be reachable:', err);
+        console.log('Note: For iOS simulator, try using localhost or your Mac IP instead of 172.20.10.2');
+      });
+  }, [streamUrl]);
+  
+  // Handle player status changes
+  useEffect(() => {
+    if (!player || !streamUrl || useWebView) return;
+    
+    const subscription = player.addListener('statusChange', (status: any) => {
+      console.log('Player status:', status);
+      if (status.status === 'readyToPlay') {
+        setIsStreamLoading(false);
+        setStreamError(null);
+      } else if (status.status === 'error') {
+        console.log('Video player error, switching to WebView fallback');
+        setUseWebView(true);
+        setIsStreamLoading(false);
+      }
+    });
+    
+    return () => {
+      subscription?.remove();
+    };
+  }, [player, streamUrl, useWebView]);
+
+  // Set loading timeout - if video player times out, try WebView
+  useEffect(() => {
+    if (!streamUrl || useWebView) return;
+    
+    const timeout = setTimeout(() => {
+      if (isStreamLoading) {
+        console.log('Stream timeout, switching to WebView fallback');
+        setUseWebView(true);
+        setIsStreamLoading(false);
+      }
+    }, 8000); // 8 second timeout before switching to WebView
+    
+    return () => clearTimeout(timeout);
+  }, [streamUrl, isStreamLoading, useWebView]);
+
+  // Devices for this home
+  const [devices] = useState<Device[]>([]);
+
+  // Recent events
+  const [recentEvents] = useState<AccessEvent[]>([]);
 
   // Load activities on mount
   useEffect(() => {
@@ -376,18 +399,211 @@ const HomeDashboardScreen: React.FC<HomeDashboardScreenProps> = ({ navigation, r
           <View className={`rounded-xl overflow-hidden ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${
             isDark ? 'border-neutral-700' : 'border-neutral-200'
           }`}>
-            <View className="aspect-video bg-neutral-800 items-center justify-center">
-              <Ionicons name="videocam" size={48} color="#a3a3a3" />
-              <Text className={`text-sm mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Camera feed will appear here
-              </Text>
-            </View>
+            {streamUrl ? (
+              <View className="aspect-video bg-neutral-900 relative">
+                {useWebView ? (
+                  <WebView
+                    source={{
+                      html: `
+                        <!DOCTYPE html>
+                        <html>
+                          <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                            <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+                            <style>
+                              * { margin: 0; padding: 0; box-sizing: border-box; }
+                              body, html { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
+                              video { 
+                                width: 100%; 
+                                height: 100%; 
+                                object-fit: cover; 
+                                background: #000;
+                              }
+                              .error {
+                                color: #fff;
+                                text-align: center;
+                                padding: 20px;
+                              }
+                            </style>
+                          </head>
+                          <body>
+                            <video id="videoPlayer" autoplay muted playsinline webkit-playsinline>
+                              <source src="${streamUrl}" type="video/mp4">
+                              <source src="${streamUrl}" type="application/x-mpegURL">
+                              <source src="${streamUrl}">
+                            </video>
+                            <div id="error" class="error" style="display: none;"></div>
+                            <script>
+                              const video = document.getElementById('videoPlayer');
+                              const errorDiv = document.getElementById('error');
+                              
+                              function sendMessage(type) {
+                                if (window.ReactNativeWebView) {
+                                  window.ReactNativeWebView.postMessage(type);
+                                }
+                              }
+                              
+                              video.addEventListener('loadstart', () => {
+                                console.log('Video loadstart');
+                                sendMessage('loadstart');
+                              });
+                              
+                              video.addEventListener('loadedmetadata', () => {
+                                console.log('Video loadedmetadata');
+                                sendMessage('loaded');
+                              });
+                              
+                              video.addEventListener('loadeddata', () => {
+                                console.log('Video loadeddata');
+                                sendMessage('loaded');
+                                video.play().catch(e => {
+                                  console.error('Play error:', e);
+                                  sendMessage('error');
+                                });
+                              });
+                              
+                              video.addEventListener('canplay', () => {
+                                console.log('Video canplay');
+                                sendMessage('playing');
+                              });
+                              
+                              video.addEventListener('playing', () => {
+                                console.log('Video playing');
+                                sendMessage('playing');
+                              });
+                              
+                              video.addEventListener('error', (e) => {
+                                console.error('Video error:', e, video.error);
+                                errorDiv.textContent = 'Stream error: ' + (video.error ? video.error.message : 'Unknown error');
+                                errorDiv.style.display = 'block';
+                                sendMessage('error');
+                              });
+                              
+                              // Try to play immediately
+                              video.play().catch(e => {
+                                console.log('Initial play failed, will retry:', e);
+                              });
+                              
+                              // Fallback: if video doesn't load, try img tag for MJPEG
+                              setTimeout(() => {
+                                if (video.readyState === 0) {
+                                  console.log('Video not loading, trying MJPEG fallback');
+                                  const img = document.createElement('img');
+                                  img.src = '${streamUrl}';
+                                  img.style.width = '100%';
+                                  img.style.height = '100%';
+                                  img.style.objectFit = 'cover';
+                                  img.onload = () => {
+                                    console.log('MJPEG image loaded');
+                                    sendMessage('playing');
+                                    document.body.innerHTML = '';
+                                    document.body.appendChild(img);
+                                  };
+                                  img.onerror = () => {
+                                    console.error('MJPEG also failed');
+                                    sendMessage('error');
+                                  };
+                                }
+                              }, 5000);
+                            </script>
+                          </body>
+                        </html>
+                      `
+                    }}
+                    style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}
+                    allowsInlineMediaPlayback={true}
+                    mediaPlaybackRequiresUserAction={false}
+                    javaScriptEnabled={true}
+                    mixedContentMode="always"
+                    onLoadStart={() => {
+                      console.log('WebView load start');
+                      setIsStreamLoading(true);
+                      setStreamError(null);
+                    }}
+                    onLoad={() => {
+                      console.log('WebView loaded');
+                    }}
+                    onMessage={(event) => {
+                      const message = event.nativeEvent.data;
+                      console.log('WebView message:', message);
+                      if (message === 'loaded' || message === 'playing') {
+                        setIsStreamLoading(false);
+                        setStreamError(null);
+                      } else if (message === 'error') {
+                        setIsStreamLoading(false);
+                        setStreamError('Failed to load stream. The stream format may not be supported.');
+                      } else if (message === 'loadstart') {
+                        setIsStreamLoading(true);
+                      }
+                    }}
+                    onError={(syntheticEvent: any) => {
+                      const { nativeEvent } = syntheticEvent;
+                      console.error('WebView error:', nativeEvent);
+                      setIsStreamLoading(false);
+                      setStreamError('Failed to load stream in WebView');
+                    }}
+                  />
+                ) : player ? (
+                  <VideoView
+                    player={player}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="cover"
+                    nativeControls={false}
+                    allowsPictureInPicture={false}
+                  />
+                ) : null}
+                {isStreamLoading && (
+                  <View className="absolute inset-0 items-center justify-center bg-neutral-900">
+                    <ActivityIndicator size="large" color="#3b82f6" />
+                    <Text className={`text-sm mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Connecting to stream...
+                    </Text>
+                    <Text className={`text-xs mt-1 ${isDark ? 'text-neutral-500' : 'text-neutral-500'} text-center px-4`}>
+                      {streamUrl?.substring(0, 40)}...
+                    </Text>
+                  </View>
+                )}
+                {streamError && (
+                  <View className="absolute inset-0 items-center justify-center bg-neutral-900 p-4">
+                    <Ionicons name="alert-circle" size={48} color="#ef4444" />
+                    <Text className={`text-sm mt-2 text-red-500 text-center px-4`}>
+                      {streamError}
+                    </Text>
+                    <Text className={`text-xs mt-2 ${isDark ? 'text-neutral-500' : 'text-neutral-400'} text-center px-4`}>
+                      Make sure the stream server is running and accessible
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setStreamError(null);
+                        setIsStreamLoading(true);
+                        try {
+                          player.replay();
+                        } catch (error) {
+                          console.error('Error reloading video:', error);
+                          setStreamError('Failed to reload stream');
+                        }
+                      }}
+                      className="mt-4 px-4 py-2 bg-primary-600 rounded-lg"
+                    >
+                      <Text className="text-white font-semibold">Retry</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View className="aspect-video bg-neutral-800 items-center justify-center">
+                <Ionicons name="videocam" size={48} color="#a3a3a3" />
+                <Text className={`text-sm mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                  Camera feed not available for this home
+                </Text>
+              </View>
+            )}
             <View className="p-4">
               <Text className={`font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                 Front Door Camera
               </Text>
               <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Last updated: 2 minutes ago
+                {streamUrl ? 'Live stream' : 'Camera feed will appear here'}
               </Text>
             </View>
           </View>

@@ -6,17 +6,15 @@ import {
   ScrollView, 
   StatusBar, 
   Alert,
-  Modal,
   TextInput,
-  Image,
   Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
-import { homePersonService } from '../../services/people-management/HomePersonService';
-import { HomePersonResponse } from '../../services/people-management/HomePersonService';
+import { homePersonService, HomePersonResponse } from '../../services/people-management/HomePersonService';
+import { faceRecognitionSettingsService } from '../../services/security/FaceRecognitionSettingsService';
 import Avatar from '../../components/Avatar';
 
 interface FaceProfile {
@@ -84,16 +82,81 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
   const [homePersons, setHomePersons] = useState<HomePersonResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
-  const [newProfileName, setNewProfileName] = useState('');
   const [aiDetectionEnabled, setAiDetectionEnabled] = useState(true);
   const [confidenceThreshold, setConfidenceThreshold] = useState(80);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [showThresholdInput, setShowThresholdInput] = useState(false);
+  const [thresholdInputValue, setThresholdInputValue] = useState('');
 
-  // Load persons on mount
+  // Load persons and settings on mount
   useEffect(() => {
     loadPersons();
+    loadSettings();
   }, [home.id]);
+
+  // Load face recognition settings from backend
+  const loadSettings = async () => {
+    try {
+      setSettingsLoading(true);
+      const settings = await faceRecognitionSettingsService.getSettingsByHomeId(home.id);
+      setAiDetectionEnabled(settings.aiDetectionEnabled);
+      setConfidenceThreshold(settings.confidenceThreshold);
+    } catch (error) {
+      console.error('Error loading face recognition settings:', error);
+      // Use defaults if backend fails
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  // Save AI detection setting
+  const handleToggleAiDetection = async (value: boolean) => {
+    try {
+      setAiDetectionEnabled(value);
+      await faceRecognitionSettingsService.updateSettingsByHomeId(home.id, {
+        aiDetectionEnabled: value
+      });
+    } catch (error) {
+      console.error('Error saving AI detection setting:', error);
+      Alert.alert('Error', 'Failed to save AI detection setting');
+      // Revert on error
+      setAiDetectionEnabled(!value);
+    }
+  };
+
+  // Save confidence threshold
+  const handleThresholdChange = async (value: number) => {
+    try {
+      const clampedValue = Math.max(0, Math.min(100, value));
+      setConfidenceThreshold(clampedValue);
+      await faceRecognitionSettingsService.updateSettingsByHomeId(home.id, {
+        confidenceThreshold: clampedValue
+      });
+      setShowThresholdInput(false);
+    } catch (error) {
+      console.error('Error saving confidence threshold:', error);
+      Alert.alert('Error', 'Failed to save confidence threshold');
+    }
+  };
+
+  const handleOpenThresholdInput = () => {
+    setThresholdInputValue(confidenceThreshold.toString());
+    setShowThresholdInput(true);
+  };
+
+  const handleSaveThreshold = () => {
+    const numValue = parseInt(thresholdInputValue, 10);
+    if (isNaN(numValue) || numValue < 0 || numValue > 100) {
+      Alert.alert('Invalid Value', 'Please enter a number between 0 and 100');
+      return;
+    }
+    handleThresholdChange(numValue);
+  };
+
+  const handleCancelThreshold = () => {
+    setShowThresholdInput(false);
+    setThresholdInputValue('');
+  };
 
   const loadPersons = async () => {
     try {
@@ -108,82 +171,6 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
     }
   };
 
-  const handleToggleProfile = async (homePersonId: string) => {
-    try {
-      const homePerson = homePersons.find(hp => hp.id === homePersonId);
-      if (!homePerson) return;
-
-      await homePersonService.updatePersonAccess(homePersonId, {
-        accessLevel: homePerson.accessLevel
-      });
-      
-      loadPersons(); // Refresh the list
-    } catch (error) {
-      console.error('Error toggling person:', error);
-      Alert.alert('Error', 'Failed to update person status');
-    }
-  };
-
-  const handleDeleteProfile = (homePersonId: string) => {
-    Alert.alert(
-      'Remove Person',
-      'Are you sure you want to remove this person from the home?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await homePersonService.removePersonFromHome(homePersonId);
-              loadPersons(); // Refresh the list
-            } catch (error) {
-              console.error('Error removing person:', error);
-              Alert.alert('Error', 'Failed to remove person');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const handleAddProfile = async () => {
-    if (!newProfileName.trim()) {
-      Alert.alert('Error', 'Please enter a name');
-      return;
-    }
-
-    try {
-      // First create the person
-      const { personService } = await import('../services/PersonService');
-      const newPerson = await personService.createPerson({
-        name: newProfileName.trim(),
-        personType: 'FAMILY_MEMBER',
-        isActive: true
-      });
-
-      // Then link them to the home
-      await homePersonService.linkPersonToHome({
-        homeId: home.id,
-        personId: newPerson.id,
-        accessLevel: 'FULL_ACCESS'
-      });
-      
-      setNewProfileName('');
-      setShowAddModal(false);
-      setShowEnrollmentModal(true);
-      loadPersons(); // Refresh the list
-    } catch (error) {
-      console.error('Error creating person:', error);
-      Alert.alert('Error', 'Failed to create person');
-    }
-  };
-
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return isDark ? '#10b981' : '#059669';
-    if (confidence >= 60) return isDark ? '#f59e0b' : '#d97706';
-    return isDark ? '#ef4444' : '#dc2626';
-  };
 
   const FaceProfileCard = ({ homePerson }: { homePerson: HomePersonResponse }) => {
     const person = homePerson.person;
@@ -251,116 +238,6 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
     );
   };
 
-  const AddProfileModal = () => (
-    <Modal
-      visible={showAddModal}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowAddModal(false)}
-    >
-      <View className="flex-1 justify-end bg-black/50">
-        <View className={`rounded-t-3xl ${isDark ? 'bg-neutral-800' : 'bg-white'} p-6`}>
-          <View className="flex-row justify-between items-center mb-6">
-            <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-              Add Face Profile
-            </Text>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
-              <Ionicons name="close" size={24} color={isDark ? '#ffffff' : '#000000'} />
-            </TouchableOpacity>
-          </View>
-          
-          <View className="mb-6">
-            <Text className={`text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-              Person Name
-            </Text>
-            <TextInput
-              className={`p-4 rounded-xl border ${
-                isDark 
-                  ? 'bg-neutral-700 border-neutral-600 text-white' 
-                  : 'bg-neutral-100 border-neutral-200 text-neutral-900'
-              }`}
-              placeholder="Enter person's name"
-              placeholderTextColor={isDark ? '#a3a3a3' : '#737373'}
-              value={newProfileName}
-              onChangeText={setNewProfileName}
-            />
-          </View>
-          
-          <TouchableOpacity
-            className={`py-4 px-6 rounded-xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'}`}
-            onPress={handleAddProfile}
-          >
-            <Text className="text-white text-lg font-semibold text-center">
-              Add Profile
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const EnrollmentModal = () => (
-    <Modal
-      visible={showEnrollmentModal}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={() => setShowEnrollmentModal(false)}
-    >
-      <View className="flex-1 justify-center bg-black/50 px-6">
-        <View className={`rounded-2xl ${isDark ? 'bg-neutral-800' : 'bg-white'} p-6`}>
-          <View className="items-center mb-6">
-            <View className={`w-20 h-20 rounded-full items-center justify-center mb-4 ${
-              isDark ? 'bg-primary-600' : 'bg-primary-500'
-            }`}>
-              <Ionicons name="camera" size={32} color="white" />
-            </View>
-            <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-              Face Enrollment
-            </Text>
-            <Text className={`text-sm text-center mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Position your face in front of the camera and look straight ahead
-            </Text>
-          </View>
-          
-          <View className="mb-6">
-            <Text className={`text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-              Enrollment Progress
-            </Text>
-            <View className={`h-2 rounded-full ${isDark ? 'bg-neutral-700' : 'bg-neutral-200'}`}>
-              <View className="h-2 rounded-full bg-primary-500" style={{ width: '75%' }} />
-            </View>
-            <Text className={`text-xs mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              75% complete - 3 of 4 angles captured
-            </Text>
-          </View>
-          
-          <View className="flex-row space-x-3">
-            <TouchableOpacity
-              className={`flex-1 py-3 px-4 rounded-xl border ${
-                isDark ? 'border-neutral-600' : 'border-neutral-300'
-              }`}
-              onPress={() => setShowEnrollmentModal(false)}
-            >
-              <Text className={`text-center font-medium ${
-                isDark ? 'text-neutral-300' : 'text-neutral-600'
-              }`}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`flex-1 py-3 px-4 rounded-xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'}`}
-              onPress={() => setShowEnrollmentModal(false)}
-            >
-              <Text className="text-white text-center font-medium">
-                Complete
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   return (
     <SafeAreaView className={`flex-1 ${isDark ? 'bg-neutral-900' : 'bg-neutral-50'}`}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
@@ -399,34 +276,110 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
             ? 'bg-neutral-800 border-neutral-700' 
             : 'bg-white border-neutral-200'
         }`}>
-          <View className="flex-row justify-between items-center mb-4">
-            <View>
-              <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+          <View className="flex-row justify-between items-center mb-6">
+            <View className="flex-1 mr-4">
+              <Text className={`text-lg font-bold mb-1 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                 AI Detection
               </Text>
               <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                Enable automatic face recognition
+                {aiDetectionEnabled 
+                  ? 'Automatic face recognition is enabled' 
+                  : 'Automatic face recognition is disabled'}
               </Text>
             </View>
             <Switch
               value={aiDetectionEnabled}
-              onValueChange={setAiDetectionEnabled}
+              onValueChange={handleToggleAiDetection}
               trackColor={{ false: '#767577', true: '#3b82f6' }}
               thumbColor={aiDetectionEnabled ? '#ffffff' : '#f4f3f4'}
             />
           </View>
           
-          <View className="mb-4">
-            <Text className={`text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-              Confidence Threshold: {confidenceThreshold}%
-            </Text>
-            <View className={`h-2 rounded-full ${isDark ? 'bg-neutral-700' : 'bg-neutral-200'}`}>
-              <View 
-                className="h-2 rounded-full bg-primary-500" 
-                style={{ width: `${confidenceThreshold}%` }} 
-              />
+          {aiDetectionEnabled && (
+            <View className="mt-6">
+              {!showThresholdInput ? (
+                <>
+                  <View className="flex-row justify-between items-center mb-2">
+                    <View className="flex-1">
+                      <Text className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                        Confidence Threshold
+                      </Text>
+                      <Text className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                        Higher threshold = stricter matching (fewer false positives)
+                      </Text>
+                    </View>
+                    <View className="items-end">
+                      <Text className={`text-2xl font-bold ${isDark ? 'text-primary-400' : 'text-primary-600'}`}>
+                        {confidenceThreshold}%
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={handleOpenThresholdInput}
+                    className="mt-3"
+                  >
+                    <Text className={`text-sm font-medium ${isDark ? 'text-primary-400' : 'text-primary-600'}`}>
+                      Change Threshold →
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <View className="mb-4">
+                    <Text className={`text-sm font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                      Confidence Threshold (0-100)
+                    </Text>
+                    <TextInput
+                      className={`p-4 rounded-xl border ${
+                        isDark 
+                          ? 'bg-neutral-700 border-neutral-600 text-white' 
+                          : 'bg-neutral-100 border-neutral-200 text-neutral-900'
+                      }`}
+                      placeholder="Enter threshold (0-100)"
+                      placeholderTextColor={isDark ? '#a3a3a3' : '#737373'}
+                      value={thresholdInputValue}
+                      onChangeText={setThresholdInputValue}
+                      keyboardType="numeric"
+                      autoFocus
+                    />
+                    <Text className={`text-xs mt-2 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Current: {confidenceThreshold}% • Higher = stricter matching
+                    </Text>
+                  </View>
+                  <View className="flex-row space-x-3">
+                    <TouchableOpacity
+                      className={`flex-1 py-3 px-4 rounded-xl border ${
+                        isDark ? 'border-neutral-600' : 'border-neutral-300'
+                      }`}
+                      onPress={handleCancelThreshold}
+                    >
+                      <Text className={`text-center font-medium ${
+                        isDark ? 'text-neutral-300' : 'text-neutral-600'
+                      }`}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className={`flex-1 py-3 px-4 rounded-xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'}`}
+                      onPress={handleSaveThreshold}
+                    >
+                      <Text className="text-white text-center font-medium">
+                        Save
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
-          </View>
+          )}
+          
+          {!aiDetectionEnabled && (
+            <View className={`mt-6 p-3 rounded-lg ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-100'}`}>
+              <Text className={`text-xs ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                AI detection is disabled. Face recognition will not run automatically.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Stats */}
@@ -510,8 +463,6 @@ const FaceDetectionScreen: React.FC<FaceDetectionScreenProps> = ({ navigation, r
         </View>
       </ScrollView>
 
-      <AddProfileModal />
-      <EnrollmentModal />
     </SafeAreaView>
   );
 };

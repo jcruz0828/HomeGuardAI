@@ -14,6 +14,7 @@ import {
   Image,
   StyleSheet,
   Dimensions,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -69,6 +70,29 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
   const [settingAvatar, setSettingAvatar] = useState(false);
   const [addingPhotosToPerson, setAddingPhotosToPerson] = useState(false);
   const [newPersonPhotos, setNewPersonPhotos] = useState<string[]>([]);
+  
+  // Access level and automatic access state (for inline editing)
+  const [selectedAccessLevel, setSelectedAccessLevel] = useState<'FULL_ACCESS' | 'LIMITED_HOURS' | 'WEEKDAYS_ONLY' | 'TEMPORARY' | 'EMERGENCY_ONLY'>('FULL_ACCESS');
+  const [automaticAccessEnabled, setAutomaticAccessEnabled] = useState(false);
+  const [automaticAccessLimit, setAutomaticAccessLimit] = useState<number | undefined>(undefined);
+  const [automaticAccessResetPeriod, setAutomaticAccessResetPeriod] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'NEVER'>('MONTHLY');
+
+  // Access level display names
+  const accessLevelNames = {
+    FULL_ACCESS: 'Resident',
+    LIMITED_HOURS: 'Daytime Access',
+    WEEKDAYS_ONLY: 'Weekday Access',
+    TEMPORARY: 'Guest',
+    EMERGENCY_ONLY: 'Emergency Only'
+  };
+
+  const accessLevelDescriptions = {
+    FULL_ACCESS: 'Full access at all times',
+    LIMITED_HOURS: 'Access during specified hours only',
+    WEEKDAYS_ONLY: 'Access Monday through Friday',
+    TEMPORARY: 'Temporary access with expiration',
+    EMERGENCY_ONLY: 'Access only in emergency situations'
+  };
 
 
   // Load people for this home
@@ -400,6 +424,20 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
     setNewPersonPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Status state
+  const [personStatus, setPersonStatus] = useState<boolean>(true);
+
+  // Initialize access settings when person is selected
+  useEffect(() => {
+    if (selectedPerson) {
+      setSelectedAccessLevel(selectedPerson.accessLevel);
+      setAutomaticAccessEnabled(selectedPerson.automaticAccessEnabled || false);
+      setAutomaticAccessLimit(selectedPerson.automaticAccessLimit);
+      setAutomaticAccessResetPeriod(selectedPerson.automaticAccessResetPeriod || 'MONTHLY');
+      setPersonStatus(selectedPerson.isActive);
+    }
+  }, [selectedPerson]);
+
   const handleDeletePhoto = async (photoUrl: string) => {
     if (!selectedPerson?.person?.id) return;
     
@@ -465,10 +503,10 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
-      <View className={`flex-row items-center justify-between px-6 py-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border-b ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
+      <View className={`flex-row items-center justify-between px-6 py-5 ${isDark ? 'bg-neutral-900' : 'bg-white'} border-b ${isDark ? 'border-neutral-800' : 'border-neutral-100'}`}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()} 
-          className="p-2"
+          className="p-2 -ml-2"
         >
           <Ionicons 
             name="arrow-back" 
@@ -476,25 +514,47 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
             color={isDark ? '#ffffff' : '#000000'} 
           />
         </TouchableOpacity>
-        <Text className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-          Manage People
-        </Text>
+        <View className="flex-1 items-center">
+          <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+            Manage People
+          </Text>
+          <Text className={`text-xs mt-0.5 ${isDark ? 'text-neutral-500' : 'text-neutral-500'}`}>
+            {people.length} {people.length === 1 ? 'person' : 'people'}
+          </Text>
+        </View>
         <TouchableOpacity 
           onPress={() => setShowAddPersonModal(true)}
-          className={`p-2 rounded-lg ${isDark ? 'bg-blue-600' : 'bg-blue-500'}`}
+          className={`p-2.5 rounded-xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'} shadow-lg`}
+          style={{
+            shadowColor: '#3b82f6',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+          }}
         >
-          <Ionicons name="add" size={24} color="#ffffff" />
+          <Ionicons name="add" size={22} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
       {/* Home Info */}
-      <View className={`px-6 py-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border-b ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
-        <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-          {home.name}
-        </Text>
-        <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-          {home.address}
-        </Text>
+      <View className={`px-6 py-5 ${isDark ? 'bg-neutral-900' : 'bg-white'} border-b ${isDark ? 'border-neutral-800' : 'border-neutral-100'}`}>
+        <View className="flex-row items-center mb-2">
+          <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isDark ? 'bg-primary-600/20' : 'bg-primary-100'}`}>
+            <Ionicons name="home" size={20} color={isDark ? '#60a5fa' : '#3b82f6'} />
+          </View>
+          <View className="flex-1">
+            <Text className={`text-xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+              {home.name}
+            </Text>
+            <View className="flex-row items-center mt-1">
+              <Ionicons name="location-outline" size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+              <Text className={`text-sm ml-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                {home.address}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* People List */}
@@ -509,25 +569,35 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
         }
       >
         {people.length === 0 ? (
-          <View className="flex-1 justify-center items-center px-6 py-12">
-            <View className={`w-16 h-16 rounded-full items-center justify-center mb-4 ${isDark ? 'bg-neutral-700' : 'bg-neutral-200'}`}>
+          <View className="flex-1 justify-center items-center px-6 py-16">
+            <View className={`w-24 h-24 rounded-full items-center justify-center mb-6 ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
               <Ionicons 
                 name="people-outline" 
-                size={32} 
-                color={isDark ? '#9ca3af' : '#6b7280'} 
+                size={40} 
+                color={isDark ? '#60a5fa' : '#3b82f6'} 
               />
             </View>
-            <Text className={`text-xl font-semibold mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+            <Text className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
               No People Yet
             </Text>
-            <Text className={`text-sm text-center mb-6 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-              Add people to manage access to your home
+            <Text className={`text-sm text-center mb-8 px-8 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+              Add people to manage access to your home and enable face recognition
             </Text>
             <TouchableOpacity
               onPress={() => setShowAddPersonModal(true)}
-              className={`px-6 py-3 rounded-lg ${isDark ? 'bg-blue-600' : 'bg-blue-500'}`}
+              className={`px-8 py-4 rounded-2xl ${isDark ? 'bg-primary-600' : 'bg-primary-500'} shadow-lg`}
+              style={{
+                shadowColor: '#3b82f6',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 8,
+              }}
             >
-              <Text className="text-white font-semibold">Add First Person</Text>
+              <View className="flex-row items-center">
+                <Ionicons name="add-circle" size={20} color="#ffffff" />
+                <Text className="text-white font-bold ml-2 text-base">Add First Person</Text>
+              </View>
             </TouchableOpacity>
           </View>
         ) : (
@@ -536,7 +606,14 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
                 <TouchableOpacity 
                   key={person.id} 
                   onPress={() => handlePersonPress(person)}
-                  className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}
+                  className={`p-5 rounded-2xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700/50' : 'border-neutral-200'} shadow-sm`}
+                  style={{
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}
                 >
                 <View className="flex-row items-center">
                   <View className="mr-4">
@@ -549,32 +626,64 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
                   </View>
                   
                   <View className="flex-1">
-                    <Text className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                      {person.person?.name || 'Unknown'}
-                    </Text>
-                    <View className="flex-row items-center mt-1">
+                    <View className="flex-row items-center justify-between mb-1">
+                      <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                        {person.person?.name || 'Unknown'}
+                      </Text>
+                      <View className={`px-2.5 py-1 rounded-full ${
+                        person.isActive 
+                          ? (isDark ? 'bg-green-600/20' : 'bg-green-100')
+                          : (isDark ? 'bg-neutral-700' : 'bg-neutral-200')
+                      }`}>
+                        <Text className={`text-xs font-semibold ${
+                          person.isActive 
+                            ? (isDark ? 'text-green-400' : 'text-green-700')
+                            : (isDark ? 'text-neutral-400' : 'text-neutral-600')
+                        }`}>
+                          {person.isActive ? 'Active' : 'Inactive'}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View className="flex-row items-center mb-2">
                       <View 
-                        className="w-2 h-2 rounded-full mr-2"
+                        className="w-2.5 h-2.5 rounded-full mr-2"
                         style={{ backgroundColor: getPersonTypeColor(person.person?.personType || '') }}
                       />
-                      <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      <Text className={`text-sm font-medium ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                         {person.person?.personType?.replace('_', ' ') || 'Unknown'}
                       </Text>
                     </View>
-                    <Text className={`text-sm mt-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                      Access: {person.accessLevel.replace('_', ' ')}
-                    </Text>
-                    {person.notes && (
-                      <Text className={`text-sm mt-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                        {person.notes}
+                    
+                    <View className="flex-row items-center mb-1">
+                      <Ionicons 
+                        name="shield-checkmark-outline" 
+                        size={14} 
+                        color={isDark ? '#9ca3af' : '#6b7280'} 
+                      />
+                      <Text className={`text-xs ml-1.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                        {accessLevelNames[person.accessLevel] || person.accessLevel.replace('_', ' ')}
                       </Text>
+                    </View>
+                    
+                    {person.automaticAccessEnabled && (
+                      <View className="flex-row items-center mt-1">
+                        <Ionicons 
+                          name="lock-open-outline" 
+                          size={14} 
+                          color={isDark ? '#10b981' : '#059669'} 
+                        />
+                        <Text className={`text-xs ml-1.5 ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                          Auto Access Enabled
+                        </Text>
+                      </View>
                     )}
                   </View>
                   
                   <Ionicons 
                     name="chevron-forward" 
                     size={20} 
-                    color={isDark ? '#9ca3af' : '#6b7280'} 
+                    color={isDark ? '#6b7280' : '#9ca3af'} 
                   />
                 </View>
               </TouchableOpacity>
@@ -818,67 +927,317 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
             <ScrollView className="flex-1 px-6 py-4">
               {/* Person Photo */}
               <View className="items-center mb-6">
-                <Avatar
-                  size="xlarge"
-                  imageUri={selectedPerson.person?.profileImagePath}
-                  name={selectedPerson.person?.name || 'Unknown'}
-                  personType={selectedPerson.person?.personType || 'UNKNOWN'}
-                  showBorder={true}
-                  borderColor={isDark ? '#374151' : '#e5e7eb'}
-                />
-                <Text className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                <View className="relative mb-4">
+                  <Avatar
+                    size="xlarge"
+                    imageUri={selectedPerson.person?.profileImagePath}
+                    name={selectedPerson.person?.name || 'Unknown'}
+                    personType={selectedPerson.person?.personType || 'UNKNOWN'}
+                    showBorder={true}
+                    borderColor={isDark ? '#374151' : '#e5e7eb'}
+                  />
+                  {selectedPerson.isActive && (
+                    <View className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-green-500 border-2 border-white items-center justify-center">
+                      <Ionicons name="checkmark" size={14} color="#ffffff" />
+                    </View>
+                  )}
+                </View>
+                <Text className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                   {selectedPerson.person?.name || 'Unknown'}
                 </Text>
-                <Text className={`text-sm ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  {selectedPerson.person?.personType?.replace('_', ' ') || 'Unknown'}
-                </Text>
+                <View className="flex-row items-center">
+                  <View 
+                    className="w-2 h-2 rounded-full mr-2"
+                    style={{ backgroundColor: getPersonTypeColor(selectedPerson.person?.personType || '') }}
+                  />
+                  <Text className={`text-sm font-medium ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                    {selectedPerson.person?.personType?.replace('_', ' ') || 'Unknown'}
+                  </Text>
+                </View>
               </View>
 
               {/* Person Information */}
-              <View className={`p-4 rounded-xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
-                <Text className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                  Information
-                </Text>
-                
-                {/* Note: Phone and email are not available in HomePersonResponse.person object */}
-                {/* These would need to be fetched separately if needed */}
-                
-                <View className="flex-row items-center mb-3">
-                  <Ionicons name="shield-outline" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                  <Text className={`ml-3 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                    Access Level: {selectedPerson.accessLevel.replace('_', ' ')}
+              <View className={`p-5 rounded-2xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700/50' : 'border-neutral-200'}`}>
+                <View className="flex-row items-center mb-4">
+                  <View className={`w-8 h-8 rounded-lg items-center justify-center mr-3 ${isDark ? 'bg-primary-600/20' : 'bg-primary-100'}`}>
+                    <Ionicons name="information-circle" size={18} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                  </View>
+                  <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                    Information
                   </Text>
                 </View>
                 
-                {selectedPerson.notes && (
-                  <View className="flex-row items-start mt-3">
-                    <Ionicons name="document-text-outline" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
-                    <Text className={`ml-3 flex-1 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                      {selectedPerson.notes}
+                <View className={`p-3 rounded-xl mb-3 ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-50'}`}>
+                  <View className="flex-row items-center">
+                    <Ionicons name="shield-checkmark" size={18} color={isDark ? '#60a5fa' : '#3b82f6'} />
+                    <Text className={`ml-3 font-medium ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                      Access Level: {accessLevelNames[selectedPerson.accessLevel] || selectedPerson.accessLevel.replace('_', ' ')}
                     </Text>
+                  </View>
+                </View>
+                
+                {selectedPerson.notes && (
+                  <View className={`p-3 rounded-xl ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-50'}`}>
+                    <View className="flex-row items-start">
+                      <Ionicons name="document-text" size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+                      <Text className={`ml-3 flex-1 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                        {selectedPerson.notes}
+                      </Text>
+                    </View>
                   </View>
                 )}
               </View>
 
               {/* Access Settings */}
-              <View className={`p-4 rounded-xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
-                <Text className={`text-lg font-semibold mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                  Access Settings
-                </Text>
-                
-                <View className="flex-row items-center justify-between mb-3">
-                  <Text className={`${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
-                    Status
+              <View className={`p-5 rounded-2xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700/50' : 'border-neutral-200'}`}>
+                <View className="flex-row items-center mb-4">
+                  <View className={`w-8 h-8 rounded-lg items-center justify-center mr-3 ${isDark ? 'bg-green-600/20' : 'bg-green-100'}`}>
+                    <Ionicons name="settings" size={18} color={isDark ? '#10b981' : '#059669'} />
+                  </View>
+                  <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                    Access Settings
                   </Text>
-                  <View className={`px-3 py-1 rounded-full ${selectedPerson.isActive ? 'bg-green-100' : 'bg-red-100'}`}>
-                    <Text className={`text-sm font-medium ${selectedPerson.isActive ? 'text-green-800' : 'text-red-800'}`}>
-                      {selectedPerson.isActive ? 'Active' : 'Inactive'}
-                    </Text>
+                </View>
+                
+                <View className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-50'} border ${isDark ? 'border-neutral-600/50' : 'border-neutral-200'}`}>
+                  <View className="flex-row items-center mb-3">
+                    <View className={`w-8 h-8 rounded-lg items-center justify-center mr-2 ${
+                      personStatus 
+                        ? (isDark ? 'bg-green-600/20' : 'bg-green-100')
+                        : (isDark ? 'bg-red-600/20' : 'bg-red-100')
+                    }`}>
+                      <Ionicons 
+                        name={personStatus ? "checkmark-circle" : "close-circle"} 
+                        size={16} 
+                        color={personStatus ? (isDark ? '#10b981' : '#059669') : (isDark ? '#ef4444' : '#dc2626')} 
+                      />
+                    </View>
+                    <View className="flex-1">
+                      <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                        Status
+                      </Text>
+                      <Text className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                        {personStatus ? 'Person has active access to this home' : 'Person access is disabled'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={personStatus}
+                      onValueChange={async (value) => {
+                        setPersonStatus(value);
+                        try {
+                          await homePersonService.updatePersonAccess(selectedPerson.id, {
+                            isActive: value
+                          });
+                          loadPeople();
+                          Alert.alert('Success', `Person status updated to ${value ? 'Active' : 'Inactive'}`);
+                        } catch (error) {
+                          console.error('Error updating person status:', error);
+                          Alert.alert('Error', 'Failed to update person status');
+                          setPersonStatus(!value);
+                        }
+                      }}
+                      trackColor={{ false: '#767577', true: '#3b82f6' }}
+                      thumbColor={personStatus ? '#ffffff' : '#f4f3f4'}
+                    />
                   </View>
                 </View>
                 
+                {/* Access Level */}
+                <View className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-50'} border ${isDark ? 'border-neutral-600/50' : 'border-neutral-200'}`}>
+                  <View className="flex-row items-center mb-3">
+                    <View className={`w-8 h-8 rounded-lg items-center justify-center mr-2 ${isDark ? 'bg-primary-600/20' : 'bg-primary-100'}`}>
+                      <Ionicons 
+                        name="person-circle" 
+                        size={16} 
+                        color={isDark ? '#60a5fa' : '#3b82f6'} 
+                      />
+                    </View>
+                    <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                      Access Role
+                    </Text>
+                  </View>
+                  
+                  <View className="flex-row flex-wrap gap-2 mb-2">
+                    {(['FULL_ACCESS', 'LIMITED_HOURS', 'WEEKDAYS_ONLY', 'TEMPORARY', 'EMERGENCY_ONLY'] as const).map((level) => (
+                      <TouchableOpacity
+                        key={level}
+                        onPress={async () => {
+                          setSelectedAccessLevel(level);
+                          try {
+                            await homePersonService.updatePersonAccess(selectedPerson.id, {
+                              accessLevel: level
+                            });
+                            loadPeople();
+                            Alert.alert('Success', 'Access level updated');
+                          } catch (error) {
+                            console.error('Error saving access level:', error);
+                            Alert.alert('Error', 'Failed to save access level');
+                            setSelectedAccessLevel(selectedPerson.accessLevel);
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-lg flex-row items-center ${
+                          selectedPerson.accessLevel === level
+                            ? (isDark ? 'bg-primary-600' : 'bg-primary-500')
+                            : (isDark ? 'bg-neutral-600' : 'bg-neutral-200')
+                        }`}
+                      >
+                        <Ionicons 
+                          name={
+                            level === 'FULL_ACCESS' ? 'shield-checkmark' :
+                            level === 'LIMITED_HOURS' ? 'time' :
+                            level === 'WEEKDAYS_ONLY' ? 'calendar' :
+                            level === 'TEMPORARY' ? 'hourglass' :
+                            'warning'
+                          } 
+                          size={14} 
+                          color={selectedPerson.accessLevel === level ? '#ffffff' : (isDark ? '#9ca3af' : '#6b7280')} 
+                        />
+                        <Text className={`text-xs font-medium ml-1.5 ${
+                          selectedPerson.accessLevel === level
+                            ? 'text-white'
+                            : (isDark ? 'text-neutral-300' : 'text-neutral-700')
+                        }`}>
+                          {accessLevelNames[level]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <Text className={`text-xs mt-1 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                    {accessLevelDescriptions[selectedPerson.accessLevel] || 'No description available'}
+                  </Text>
+                </View>
+
+                {/* Automatic Access */}
+                <View className={`p-4 rounded-xl mb-3 ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-50'} border ${isDark ? 'border-neutral-600/50' : 'border-neutral-200'}`}>
+                  <View className="flex-row justify-between items-center mb-3">
+                    <View className="flex-row items-center flex-1">
+                      <View className={`w-8 h-8 rounded-lg items-center justify-center mr-2 ${
+                        selectedPerson.automaticAccessEnabled 
+                          ? (isDark ? 'bg-green-600/20' : 'bg-green-100')
+                          : (isDark ? 'bg-neutral-600/20' : 'bg-neutral-200')
+                      }`}>
+                        <Ionicons 
+                          name={selectedPerson.automaticAccessEnabled ? "lock-open" : "lock-closed"} 
+                          size={16} 
+                          color={selectedPerson.automaticAccessEnabled ? (isDark ? '#10b981' : '#059669') : (isDark ? '#9ca3af' : '#6b7280')} 
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                          Automatic Access
+                        </Text>
+                        <Text className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                          {selectedPerson.automaticAccessEnabled ? 'Door opens automatically when recognized' : 'Manual access required'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Switch
+                      value={automaticAccessEnabled}
+                      onValueChange={async (value) => {
+                        setAutomaticAccessEnabled(value);
+                        try {
+                          await homePersonService.updatePersonAccess(selectedPerson.id, {
+                            automaticAccessEnabled: value,
+                            automaticAccessLimit: automaticAccessLimit || undefined,
+                            automaticAccessResetPeriod
+                          });
+                          loadPeople();
+                          Alert.alert('Success', 'Automatic access settings updated');
+                        } catch (error) {
+                          console.error('Error saving automatic access settings:', error);
+                          Alert.alert('Error', 'Failed to save automatic access settings');
+                          setAutomaticAccessEnabled(!value);
+                        }
+                      }}
+                      trackColor={{ false: '#767577', true: '#3b82f6' }}
+                      thumbColor={automaticAccessEnabled ? '#ffffff' : '#f4f3f4'}
+                    />
+                  </View>
+                  
+                  {automaticAccessEnabled && (
+                    <>
+                      {/* Access Limit */}
+                      <View className="mb-3">
+                        <Text className={`text-xs font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                          Access Limit (Optional)
+                        </Text>
+                        <TextInput
+                          className={`p-3 rounded-lg border ${
+                            isDark 
+                              ? 'bg-neutral-600 border-neutral-500 text-white' 
+                              : 'bg-white border-neutral-300 text-neutral-900'
+                          }`}
+                          placeholder="Unlimited"
+                          placeholderTextColor={isDark ? '#a3a3a3' : '#737373'}
+                          value={automaticAccessLimit?.toString() || ''}
+                          onChangeText={(text) => {
+                            const num = parseInt(text, 10);
+                            setAutomaticAccessLimit(isNaN(num) ? undefined : num);
+                          }}
+                          keyboardType="numeric"
+                        />
+                        {selectedPerson.automaticAccessCount !== undefined && (
+                          <Text className={`text-xs mt-1.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                            Current usage: {selectedPerson.automaticAccessCount}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Reset Period */}
+                      <View className="mb-2">
+                        <Text className={`text-xs font-medium mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                          Reset Period
+                        </Text>
+                        <View className="flex-row flex-wrap gap-2">
+                          {(['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'NEVER'] as const).map((period) => (
+                            <TouchableOpacity
+                              key={period}
+                              onPress={async () => {
+                                setAutomaticAccessResetPeriod(period);
+                                try {
+                                  await homePersonService.updatePersonAccess(selectedPerson.id, {
+                                    automaticAccessEnabled,
+                                    automaticAccessLimit: automaticAccessLimit || undefined,
+                                    automaticAccessResetPeriod: period
+                                  });
+                                  loadPeople();
+                                } catch (error) {
+                                  console.error('Error saving reset period:', error);
+                                }
+                              }}
+                              className={`px-3 py-1.5 rounded-lg ${
+                                automaticAccessResetPeriod === period
+                                  ? (isDark ? 'bg-primary-600' : 'bg-primary-500')
+                                  : (isDark ? 'bg-neutral-600' : 'bg-neutral-200')
+                              }`}
+                            >
+                              <Text className={`text-xs font-medium ${
+                                automaticAccessResetPeriod === period
+                                  ? 'text-white'
+                                  : (isDark ? 'text-neutral-300' : 'text-neutral-700')
+                              }`}>
+                                {period.charAt(0) + period.slice(1).toLowerCase()}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                      
+                      <View className={`mt-2 p-2.5 rounded-lg ${isDark ? 'bg-neutral-600/30' : 'bg-neutral-100'}`}>
+                        <Text className={`text-xs ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
+                          <Text className="font-semibold">Used:</Text> {selectedPerson.automaticAccessCount || 0}
+                          {selectedPerson.automaticAccessLimit ? ` / ${selectedPerson.automaticAccessLimit}` : ' (unlimited)'}
+                          {' • '}
+                          <Text className="font-semibold">Reset:</Text> {(selectedPerson.automaticAccessResetPeriod || 'MONTHLY').toLowerCase()}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+                
                 {selectedPerson.accessExpiresAt && (
-                  <View className="flex-row items-center">
+                  <View className="flex-row items-center mt-3">
                     <Ionicons name="time-outline" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                     <Text className={`ml-3 ${isDark ? 'text-neutral-300' : 'text-neutral-700'}`}>
                       Expires: {new Date(selectedPerson.accessExpiresAt).toLocaleDateString()}
@@ -897,13 +1256,20 @@ const ManagePeopleScreen: React.FC<ManagePeopleScreenProps> = ({ navigation, rou
               </View>
 
               {/* Person Photos */}
-              <View className={`p-4 rounded-xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700' : 'border-neutral-200'}`}>
-                <Text className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
-                  Photos ({personPhotos.length})
-                </Text>
-                <Text className={`text-sm mb-4 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
-                  Tap any photo to set as avatar • Blue checkmark shows current avatar • Tap X to delete
-                </Text>
+              <View className={`p-5 rounded-2xl mb-4 ${isDark ? 'bg-neutral-800' : 'bg-white'} border ${isDark ? 'border-neutral-700/50' : 'border-neutral-200'}`}>
+                <View className="flex-row items-center mb-4">
+                  <View className={`w-8 h-8 rounded-lg items-center justify-center mr-3 ${isDark ? 'bg-purple-600/20' : 'bg-purple-100'}`}>
+                    <Ionicons name="images" size={18} color={isDark ? '#a78bfa' : '#8b5cf6'} />
+                  </View>
+                  <View className="flex-1">
+                    <Text className={`text-lg font-bold ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+                      Photos ({personPhotos.length})
+                    </Text>
+                    <Text className={`text-xs mt-0.5 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
+                      Tap photo to set avatar • Tap X to delete
+                    </Text>
+                  </View>
+                </View>
                 
                 {loadingPhotos ? (
                   <View className="items-center py-8">

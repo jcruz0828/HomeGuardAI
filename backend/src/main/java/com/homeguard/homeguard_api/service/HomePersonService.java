@@ -47,6 +47,13 @@ public class HomePersonService {
                 LocalDateTime.parse(request.getAccessExpiresAt()) : null);
         homePerson.setNotes(request.getNotes());
         homePerson.setIsActive(true);
+        homePerson.setAutomaticAccessEnabled(request.getAutomaticAccessEnabled() != null ? 
+                request.getAutomaticAccessEnabled() : false);
+        homePerson.setAutomaticAccessLimit(request.getAutomaticAccessLimit());
+        homePerson.setAutomaticAccessResetPeriod(request.getAutomaticAccessResetPeriod() != null ? 
+                request.getAutomaticAccessResetPeriod() : "MONTHLY");
+        homePerson.setAutomaticAccessCount(0);
+        homePerson.setAutomaticAccessLastReset(LocalDateTime.now());
         homePerson.setCreatedAt(LocalDateTime.now());
         homePerson.setUpdatedAt(LocalDateTime.now());
         
@@ -83,10 +90,27 @@ public class HomePersonService {
         HomePerson homePerson = homePersonRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("HomePerson relationship not found"));
         
-        homePerson.setAccessLevel(request.getAccessLevel());
-        homePerson.setAccessExpiresAt(request.getAccessExpiresAt() != null ? 
-                LocalDateTime.parse(request.getAccessExpiresAt()) : null);
-        homePerson.setNotes(request.getNotes());
+        if (request.getAccessLevel() != null) {
+            homePerson.setAccessLevel(request.getAccessLevel());
+        }
+        if (request.getAccessExpiresAt() != null) {
+            homePerson.setAccessExpiresAt(LocalDateTime.parse(request.getAccessExpiresAt()));
+        }
+        if (request.getIsActive() != null) {
+            homePerson.setIsActive(request.getIsActive());
+        }
+        if (request.getNotes() != null) {
+            homePerson.setNotes(request.getNotes());
+        }
+        if (request.getAutomaticAccessEnabled() != null) {
+            homePerson.setAutomaticAccessEnabled(request.getAutomaticAccessEnabled());
+        }
+        if (request.getAutomaticAccessLimit() != null) {
+            homePerson.setAutomaticAccessLimit(request.getAutomaticAccessLimit());
+        }
+        if (request.getAutomaticAccessResetPeriod() != null) {
+            homePerson.setAutomaticAccessResetPeriod(request.getAutomaticAccessResetPeriod());
+        }
         homePerson.setUpdatedAt(LocalDateTime.now());
         
         HomePerson saved = homePersonRepository.save(homePerson);
@@ -133,6 +157,14 @@ public class HomePersonService {
                 homePerson.getLastAccessed().toString() : null);
         dto.setCreatedAt(homePerson.getCreatedAt());
         dto.setUpdatedAt(homePerson.getUpdatedAt());
+        
+        // Automatic access fields
+        dto.setAutomaticAccessEnabled(homePerson.getAutomaticAccessEnabled());
+        dto.setAutomaticAccessCount(homePerson.getAutomaticAccessCount());
+        dto.setAutomaticAccessLimit(homePerson.getAutomaticAccessLimit());
+        dto.setAutomaticAccessResetPeriod(homePerson.getAutomaticAccessResetPeriod());
+        dto.setAutomaticAccessLastReset(homePerson.getAutomaticAccessLastReset() != null ? 
+                homePerson.getAutomaticAccessLastReset().toString() : null);
         
         // Add person info
         HomePersonResponseDto.PersonInfo personInfo = new HomePersonResponseDto.PersonInfo();

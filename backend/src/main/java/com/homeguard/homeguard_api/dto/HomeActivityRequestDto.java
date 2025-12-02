@@ -1,5 +1,6 @@
 package com.homeguard.homeguard_api.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.homeguard.homeguard_api.enums.ActivityPriority;
 import com.homeguard.homeguard_api.enums.ActivityType;
 import jakarta.validation.constraints.NotNull;
@@ -46,5 +47,6 @@ public class HomeActivityRequestDto {
     private String additionalData;
     
     @NotNull
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private LocalDateTime activityTimestamp;
 }

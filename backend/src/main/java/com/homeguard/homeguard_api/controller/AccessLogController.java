@@ -2,6 +2,8 @@ package com.homeguard.homeguard_api.controller;
 
 import com.homeguard.homeguard_api.dto.AccessLogRequestDto;
 import com.homeguard.homeguard_api.dto.AccessLogResponseDto;
+import com.homeguard.homeguard_api.enums.AccessResult;
+import com.homeguard.homeguard_api.enums.AccessType;
 import com.homeguard.homeguard_api.model.AccessLog;
 import com.homeguard.homeguard_api.service.AccessLogService;
 import lombok.RequiredArgsConstructor;
@@ -47,13 +49,61 @@ public class AccessLogController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/users/{userId}")
-    public ResponseEntity<List<AccessLogResponseDto>> getAccessLogsByUserId(@PathVariable String userId) {
-        List<AccessLog> accessLogs = accessLogService.getAccessLogsByUserId(userId);
-        List<AccessLogResponseDto> response = accessLogs.stream()
-            .map(this::mapToResponseDto)
-            .toList();
-        return ResponseEntity.ok(response);
+    /**
+     * Endpoint for edge device to log face recognition event
+     * POST /api/v1/access-logs/face-recognition
+     * Body: { deviceId, personId (optional), recognized (boolean), confidence (optional), imagePath (optional), reason (optional) }
+     */
+    @PostMapping("/face-recognition")
+    public ResponseEntity<AccessLogResponseDto> logFaceRecognition(@RequestBody FaceRecognitionLogRequest request) {
+        accessLogService.logFaceRecognition(
+            request.getDeviceId(), 
+            request.getPersonId(), 
+            request.isRecognized(), 
+            request.getConfidence(), 
+            request.getImagePath(), 
+            request.getReason()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+    
+    /**
+     * Endpoint for logging lock/unlock events
+     * POST /api/v1/access-logs/lock-unlock
+     * Body: { deviceId, lockType (LOCK/UNLOCK), personId (optional), result, reason (optional) }
+     */
+    @PostMapping("/lock-unlock")
+    public ResponseEntity<AccessLogResponseDto> logLockUnlock(@RequestBody LockUnlockLogRequest request) {
+        accessLogService.logLockUnlock(
+            request.getDeviceId(), 
+            request.getLockType(), 
+            request.getPersonId(), 
+            request.getResult(), 
+            request.getReason()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+    
+    // Inner classes for request DTOs
+    @lombok.Getter
+    @lombok.Setter
+    private static class FaceRecognitionLogRequest {
+        private String deviceId;
+        private String personId;
+        private boolean recognized;
+        private Double confidence;
+        private String imagePath;
+        private String reason;
+    }
+    
+    @lombok.Getter
+    @lombok.Setter
+    private static class LockUnlockLogRequest {
+        private String deviceId;
+        private AccessType lockType;
+        private String personId;
+        private AccessResult result;
+        private String reason;
     }
     
     @GetMapping("/persons/{personId}")
@@ -113,6 +163,12 @@ public class AccessLogController {
                 dto.setHomeId(accessLog.getDevice().getHome().getId());
                 dto.setHomeName(accessLog.getDevice().getHome().getName());
             }
+        }
+        
+        // Also check direct home reference (for home CRUD operations)
+        if (accessLog.getHome() != null && dto.getHomeId() == null) {
+            dto.setHomeId(accessLog.getHome().getId());
+            dto.setHomeName(accessLog.getHome().getName());
         }
         
         dto.setAccessType(accessLog.getAccessType());

@@ -26,18 +26,28 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
+    console.log('=== LOGIN SCREEN: LOGIN ATTEMPT ===');
+    console.log('Email entered:', email);
+    console.log('Password provided:', !!password);
+    console.log('Password length:', password.length);
+    
     if (!email || !password) {
+      console.warn('❌ Validation failed: Missing email or password');
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
-
-    
-    // Comment out the actual auth for now
-    
+    console.log('Calling signIn service...');
     const response = await signIn(email, password);
     
+    console.log('Sign in response received:');
+    console.log('Success:', response.success);
+    console.log('Error:', response.error);
+    console.log('Message:', response.message);
+    console.log('User:', response.user ? 'Present' : 'Missing');
+    
     if (response.success) {
+      console.log('✅ Login successful');
       Alert.alert('Success', response.message || 'Login successful!', [
         { text: 'OK', onPress: () => {
           // Navigation will be handled automatically by AppNavigator
@@ -45,9 +55,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         }}
       ]);
     } else {
+      console.error('❌ Login failed:', response.error);
       Alert.alert('Error', response.error || 'Login failed');
     }
   
+    console.log('=== LOGIN SCREEN: LOGIN ATTEMPT COMPLETE ===');
   };
 
   return (

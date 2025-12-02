@@ -3,6 +3,8 @@ const EXPO_PUBLIC_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const EXPO_PUBLIC_SPRING_API_BASE_URL = process.env.EXPO_PUBLIC_SPRING_API_BASE_URL || 'http://localhost:8080/api/v1';
 const EXPO_PUBLIC_ENVIRONMENT = process.env.EXPO_PUBLIC_ENVIRONMENT || 'development';
+const EXPO_PUBLIC_STREAM_SECRET_KEY = process.env.EXPO_PUBLIC_STREAM_SECRET_KEY || 'YOUR_SECRET_KEY';
+const EXPO_PUBLIC_STREAM_BASE_URL = process.env.EXPO_PUBLIC_STREAM_BASE_URL || 'http://172.20.10.2:8000';
 
 // Validate required environment variables
 if (!EXPO_PUBLIC_SUPABASE_URL) {
@@ -47,6 +49,10 @@ export const API_CONFIG = {
     HOME_INVITATIONS: '/home-invitations',
     PERSONS: '/persons',
   },
+  
+  // Stream Configuration
+  STREAM_BASE_URL: EXPO_PUBLIC_STREAM_BASE_URL,
+  STREAM_SECRET_KEY: EXPO_PUBLIC_STREAM_SECRET_KEY,
   
   // Request timeouts
   TIMEOUT: 10000, // 10 seconds

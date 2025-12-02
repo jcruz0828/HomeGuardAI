@@ -1,5 +1,6 @@
 package com.homeguard.homeguard_api.controller;
 
+import com.homeguard.homeguard_api.dto.PersonEmbeddingDto;
 import com.homeguard.homeguard_api.dto.PersonRequestDto;
 import com.homeguard.homeguard_api.dto.PersonResponseDto;
 import com.homeguard.homeguard_api.service.PersonService;
@@ -59,6 +60,12 @@ public class PersonController {
     @GetMapping("/home/{homeId}")
     public ResponseEntity<List<PersonResponseDto>> getPersonsByHomeId(@PathVariable String homeId) {
         List<PersonResponseDto> response = personService.getPersonsByHomeId(homeId);
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/home/{homeId}/embeddings")
+    public ResponseEntity<List<PersonEmbeddingDto>> getPersonEmbeddingsByHomeId(@PathVariable String homeId) {
+        List<PersonEmbeddingDto> response = personService.getPersonEmbeddingsByHomeId(homeId);
         return ResponseEntity.ok(response);
     }
     

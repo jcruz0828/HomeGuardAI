@@ -31,58 +31,7 @@ const QueuedRequestsScreen: React.FC<QueuedRequestsScreenProps> = ({ navigation 
   const { isDark } = useTheme();
   
   // State
-  const [queuedRequests, setQueuedRequests] = useState<QueuedRequest[]>([
-    {
-      id: '1',
-      timestamp: '1 minute ago',
-      type: 'door_open',
-      personName: 'John Doe',
-      homeName: 'Main Residence',
-      location: 'Front Door',
-      message: 'Requesting access to front door',
-      status: 'pending'
-    },
-    {
-      id: '2',
-      timestamp: '3 minutes ago',
-      type: 'call',
-      personName: 'Jane Smith',
-      homeName: 'Beach House',
-      location: 'Intercom',
-      message: 'Calling from intercom',
-      status: 'pending'
-    },
-    {
-      id: '3',
-      timestamp: '5 minutes ago',
-      type: 'emergency',
-      personName: 'Mike Johnson',
-      homeName: 'Main Residence',
-      location: 'Emergency Button',
-      message: 'Emergency assistance needed',
-      status: 'pending'
-    },
-    {
-      id: '4',
-      timestamp: '10 minutes ago',
-      type: 'maintenance',
-      personName: 'Sarah Wilson',
-      homeName: 'Beach House',
-      location: 'Back Door',
-      message: 'Scheduled maintenance visit',
-      status: 'approved'
-    },
-    {
-      id: '5',
-      timestamp: '15 minutes ago',
-      type: 'door_open',
-      personName: 'Alex Brown',
-      homeName: 'Main Residence',
-      location: 'Garage Door',
-      message: 'Delivery access request',
-      status: 'denied'
-    }
-  ]);
+  const [queuedRequests, setQueuedRequests] = useState<QueuedRequest[]>([]);
   
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);

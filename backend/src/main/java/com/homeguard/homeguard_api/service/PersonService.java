@@ -1,8 +1,11 @@
 package com.homeguard.homeguard_api.service;
 
+import com.homeguard.homeguard_api.dto.PersonEmbeddingDto;
 import com.homeguard.homeguard_api.dto.PersonRequestDto;
 import com.homeguard.homeguard_api.dto.PersonResponseDto;
+import com.homeguard.homeguard_api.model.HomePerson;
 import com.homeguard.homeguard_api.model.Person;
+import com.homeguard.homeguard_api.repository.HomePersonRepository;
 import com.homeguard.homeguard_api.repository.PersonRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +25,7 @@ import java.util.stream.Collectors;
 public class PersonService {
     
     private final PersonRepository personRepository;
+    private final HomePersonRepository homePersonRepository;
     private final MLServiceClient mlServiceClient;
     
     public PersonResponseDto createPerson(PersonRequestDto request) {
@@ -197,10 +201,51 @@ public class PersonService {
     }
     
     public List<PersonResponseDto> getPersonsByHomeId(String homeId) {
-        // This method should be implemented to join with HomePerson table
-        // For now, it returns all active persons, but ideally should filter by home
-        // The proper implementation would require a custom repository method
-        return getAllActivePersons();
+        // Get all active HomePerson relationships for this home
+        List<HomePerson> homePersons = homePersonRepository.findByHomeIdAndIsActiveTrue(homeId);
+        
+        // Extract person IDs and fetch persons
+        List<String> personIds = homePersons.stream()
+                .map(hp -> hp.getPerson().getId())
+                .collect(Collectors.toList());
+        
+        // Fetch all persons by their IDs
+        List<Person> persons = personRepository.findAllById(personIds);
+        
+        // Map to DTOs
+        return persons.stream()
+                .filter(Person::getIsActive)
+                .map(this::mapToResponseDto)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * Get face embeddings for all persons in a home
+     * Returns only persons who have embeddings generated
+     */
+    public List<PersonEmbeddingDto> getPersonEmbeddingsByHomeId(String homeId) {
+        // Get all active HomePerson relationships for this home
+        List<HomePerson> homePersons = homePersonRepository.findByHomeIdAndIsActiveTrue(homeId);
+        
+        // Extract person IDs and fetch persons
+        List<String> personIds = homePersons.stream()
+                .map(hp -> hp.getPerson().getId())
+                .collect(Collectors.toList());
+        
+        // Fetch all persons by their IDs
+        List<Person> persons = personRepository.findAllById(personIds);
+        
+        // Filter to only persons with embeddings and map to DTO
+        return persons.stream()
+                .filter(p -> p.getIsActive() && p.getFaceVector() != null && !p.getFaceVector().isEmpty())
+                .map(p -> {
+                    PersonEmbeddingDto dto = new PersonEmbeddingDto();
+                    dto.setPersonId(p.getId());
+                    dto.setName(p.getName());
+                    dto.setFaceVector(p.getFaceVector());
+                    return dto;
+                })
+                .collect(Collectors.toList());
     }
     
     /**

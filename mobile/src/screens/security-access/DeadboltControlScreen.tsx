@@ -8,12 +8,15 @@ import {
   Alert,
   Switch,
   Modal,
-  TextInput
+  TextInput,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
+import { API_CONFIG } from '../../config/api';
+import { homeActivityService } from '../../services/home-management/HomeActivityService';
 
 interface Deadbolt {
   id: string;
@@ -41,51 +44,207 @@ const DeadboltControlScreen: React.FC<DeadboltControlScreenProps> = ({ navigatio
   const { user } = useUser();
   const { home } = route.params;
   
-  const [deadbolts, setDeadbolts] = useState<Deadbolt[]>([
-    {
-      id: '1',
-      name: 'Front Door',
-      location: 'Main Entrance',
-      isLocked: true,
-      isOnline: true,
-      batteryLevel: 85,
-      lastActivity: '2 minutes ago',
-      autoUnlockEnabled: true,
-      autoLockTimeout: 5
-    },
-    {
-      id: '2',
-      name: 'Back Door',
-      location: 'Garden Entrance',
-      isLocked: false,
-      isOnline: true,
-      batteryLevel: 92,
-      lastActivity: '1 minute ago',
-      autoUnlockEnabled: false,
-      autoLockTimeout: 10
-    },
-    {
-      id: '3',
-      name: 'Garage Door',
-      location: 'Garage',
-      isLocked: true,
-      isOnline: false,
-      batteryLevel: 45,
-      lastActivity: '2 hours ago',
-      autoUnlockEnabled: true,
-      autoLockTimeout: 15
+  // Static deadbolt for home ID: 22e0d413-bf1c-47a5-8a00-cc18d9c6abd6
+  const getStaticDeadbolts = (): Deadbolt[] => {
+    const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+    if (home.id === targetHomeId) {
+      return [
+        {
+          id: 'deadbolt-1',
+          name: 'Front Door Deadbolt',
+          location: 'Front Door',
+          isLocked: false,
+          isOnline: true,
+          batteryLevel: 85,
+          lastActivity: 'Just now',
+          autoUnlockEnabled: true,
+          autoLockTimeout: 5
+        }
+      ];
     }
-  ]);
+    return [];
+  };
+  
+  const [deadbolts, setDeadbolts] = useState<Deadbolt[]>(getStaticDeadbolts());
+  const [isLocking, setIsLocking] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+  const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
+
+  // Fetch lock status from API
+  const fetchLockStatus = async () => {
+    const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+    if (home.id !== targetHomeId) return;
+
+    setIsLoadingStatus(true);
+    try {
+      const url = `${API_CONFIG.STREAM_BASE_URL}/status?key=${API_CONFIG.STREAM_SECRET_KEY}`;
+      console.log('Fetching lock status from:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Lock status response:', data);
+        
+        // Update deadbolt status based on API response
+        // Handle format: {status: "locked"} or {status: "unlocked"}
+        const isLocked = data.status === 'locked' || 
+                        data.status === 'Locked' ||
+                        data.locked === true ||
+                        data.isLocked === true;
+        
+        setDeadbolts(prev => prev.map(d => 
+          d.id === 'deadbolt-1'
+            ? { 
+                ...d, 
+                isLocked: isLocked,
+                isOnline: true,
+                lastActivity: 'Just now'
+              }
+            : d
+        ));
+      } else {
+        console.error('Failed to fetch lock status:', response.status);
+        // Keep default status if API call fails
+      }
+    } catch (error) {
+      console.error('Error fetching lock status:', error);
+      // Keep default status if API call fails
+    } finally {
+      setIsLoadingStatus(false);
+    }
+  };
+
+  // Update deadbolts when home changes and fetch status
+  useEffect(() => {
+    setDeadbolts(getStaticDeadbolts());
+    fetchLockStatus();
+  }, [home.id]);
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [selectedDeadbolt, setSelectedDeadbolt] = useState<Deadbolt | null>(null);
 
-  const handleLockToggle = (deadboltId: string) => {
-    setDeadbolts(prev => prev.map(deadbolt => 
-      deadbolt.id === deadboltId 
-        ? { ...deadbolt, isLocked: !deadbolt.isLocked }
-        : deadbolt
-    ));
+  const handleLockToggle = async (deadboltId: string) => {
+    const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+    if (home.id !== targetHomeId) {
+      Alert.alert('Error', 'Device not available for this home');
+      return;
+    }
+
+    const deadbolt = deadbolts.find(d => d.id === deadboltId);
+    if (!deadbolt) return;
+
+    const isCurrentlyLocked = deadbolt.isLocked;
+    const action = isCurrentlyLocked ? 'unlock' : 'lock';
+    
+    setIsLocking(true);
+    
+    try {
+      // Use /unlock endpoint for both lock and unlock (as per user's curl example)
+      const url = `${API_CONFIG.STREAM_BASE_URL}/unlock?key=${API_CONFIG.STREAM_SECRET_KEY}`;
+      console.log(`Calling ${action} endpoint:`, url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        // Create activity for lock/unlock action
+        try {
+          await homeActivityService.createActivity({
+            homeId: home.id,
+            userId: user?.id,
+            deviceId: deadboltId,
+            activityType: action === 'unlock' ? 'DOOR_OPENED' : 'DOOR_CLOSED',
+            priority: 'MEDIUM',
+            title: action === 'unlock' 
+              ? `${user?.name || 'User'} unlocked ${deadbolt.name}`
+              : `${user?.name || 'User'} locked ${deadbolt.name}`,
+            description: action === 'unlock'
+              ? `Front door was unlocked via mobile app. Door will auto-lock in 3 seconds.`
+              : `Front door was locked via mobile app.`,
+            location: deadbolt.location,
+            activityTimestamp: new Date().toISOString(),
+          });
+        } catch (activityError) {
+          console.error('Failed to create activity:', activityError);
+          // Don't fail the lock/unlock operation if activity creation fails
+        }
+
+        if (action === 'unlock') {
+          // Immediately show as unlocked
+          setDeadbolts(prev => prev.map(d => 
+            d.id === deadboltId 
+              ? { ...d, isLocked: false, lastActivity: 'Just now' }
+              : d
+          ));
+          
+          // Start countdown from 3 seconds
+          setUnlockCountdown(3);
+          
+          // Countdown timer
+          const countdownInterval = setInterval(() => {
+            setUnlockCountdown(prev => {
+              if (prev === null || prev <= 1) {
+                clearInterval(countdownInterval);
+                return null;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          
+          // After 3 seconds, automatically lock again
+          setTimeout(async () => {
+            setDeadbolts(prev => prev.map(d => 
+              d.id === deadboltId 
+                ? { ...d, isLocked: true, lastActivity: 'Just now' }
+                : d
+            ));
+            setUnlockCountdown(null);
+            clearInterval(countdownInterval);
+            console.log('Door automatically locked after 3 seconds');
+            
+            // Create activity for auto-lock
+            try {
+              await homeActivityService.createActivity({
+                homeId: home.id,
+                deviceId: deadboltId,
+                activityType: 'DOOR_CLOSED',
+                priority: 'MEDIUM',
+                title: `${deadbolt.name} automatically locked`,
+                description: `Front door automatically locked after 3 seconds.`,
+                location: deadbolt.location,
+                activityTimestamp: new Date().toISOString(),
+              });
+            } catch (activityError) {
+              console.error('Failed to create auto-lock activity:', activityError);
+            }
+          }, 3000);
+        } else {
+          // For lock action, fetch updated status
+          setUnlockCountdown(null);
+          await fetchLockStatus();
+          Alert.alert('Success', 'Door locked successfully');
+        }
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to ${action}:`, errorText);
+        Alert.alert('Error', `Failed to ${action} door. Please try again.`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing door:`, error);
+      Alert.alert('Error', `Network error. Please check your connection and try again.`);
+    } finally {
+      setIsLocking(false);
+    }
   };
 
   const handleAutoUnlockToggle = (deadboltId: string) => {
@@ -140,11 +299,18 @@ const DeadboltControlScreen: React.FC<DeadboltControlScreenProps> = ({ navigatio
             size={24} 
             color={deadbolt.isLocked ? (isDark ? '#ef4444' : '#dc2626') : (isDark ? '#10b981' : '#059669')} 
           />
-          <Text className={`text-lg font-semibold ml-3 ${
-            deadbolt.isLocked ? (isDark ? 'text-red-400' : 'text-red-600') : (isDark ? 'text-green-400' : 'text-green-600')
-          }`}>
-            {deadbolt.isLocked ? 'Locked' : 'Unlocked'}
-          </Text>
+          <View className="ml-3">
+            <Text className={`text-lg font-semibold ${
+              deadbolt.isLocked ? (isDark ? 'text-red-400' : 'text-red-600') : (isDark ? 'text-green-400' : 'text-green-600')
+            }`}>
+              {deadbolt.isLocked ? 'Locked' : 'Unlocked'}
+            </Text>
+            {!deadbolt.isLocked && unlockCountdown !== null && (
+              <Text className={`text-xs font-medium ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                Auto-locking in {unlockCountdown} second{unlockCountdown !== 1 ? 's' : ''}...
+              </Text>
+            )}
+          </View>
         </View>
         <TouchableOpacity
           className={`px-4 py-2 rounded-xl ${
@@ -153,10 +319,16 @@ const DeadboltControlScreen: React.FC<DeadboltControlScreenProps> = ({ navigatio
               : (isDark ? 'bg-green-600' : 'bg-green-500')
           }`}
           onPress={() => handleLockToggle(deadbolt.id)}
+          disabled={isLocking || !deadbolt.isOnline}
+          style={{ opacity: (isLocking || !deadbolt.isOnline) ? 0.5 : 1 }}
         >
-          <Text className="text-white font-semibold">
-            {deadbolt.isLocked ? 'Unlock' : 'Lock'}
-          </Text>
+          {isLocking ? (
+            <Text className="text-white font-semibold">Processing...</Text>
+          ) : (
+            <Text className="text-white font-semibold">
+              {deadbolt.isLocked ? 'Unlock' : 'Lock'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
       
@@ -284,7 +456,17 @@ const DeadboltControlScreen: React.FC<DeadboltControlScreenProps> = ({ navigatio
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        className="flex-1 px-6" 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoadingStatus}
+            onRefresh={fetchLockStatus}
+            tintColor={isDark ? '#3b82f6' : '#2563eb'}
+          />
+        }
+      >
         {/* Quick Stats */}
         <View className="flex-row justify-between mb-6">
           <View className={`flex-1 p-4 rounded-xl mr-2 ${

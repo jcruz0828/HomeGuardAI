@@ -11,12 +11,13 @@ import lombok.Setter;
 @Setter
 public class AccessLogRequestDto {
     
-    @NotNull
-    private String deviceId;
+    private String deviceId; // Optional - not required for home CRUD operations
     
-    private String userId;
+    private String homeId; // Optional - for home CRUD operations or when device is not available
     
-    private String personId;
+    private String userId; // Optional - for user-initiated operations
+    
+    private String personId; // Optional - for person recognition events
     
     @NotNull
     private AccessType accessType;

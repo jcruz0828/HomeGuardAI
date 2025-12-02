@@ -175,6 +175,57 @@ class HomeActivityService {
   }
 
   /**
+   * Create a new activity
+   */
+  async createActivity(activity: {
+    homeId: string;
+    userId?: string;
+    personId?: string;
+    deviceId?: string;
+    activityType: string;
+    priority?: string;
+    title: string;
+    description?: string;
+    location?: string;
+    imagePath?: string;
+    confidence?: number;
+    additionalData?: string;
+    activityTimestamp: string;
+  }): Promise<HomeActivity> {
+    try {
+      const response = await fetch(`${this.baseUrl}${this.endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(activity),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { message: errorText || `HTTP error! status: ${response.status}` };
+        }
+        console.error('Activity creation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+          requestBody: activity,
+        });
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all activities for all homes that a user has access to
    * This method fetches activities from each home individually and combines them
    */

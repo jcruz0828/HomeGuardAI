@@ -21,6 +21,13 @@ public class HomePersonResponseDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
+    // Automatic access fields
+    private Boolean automaticAccessEnabled;
+    private Integer automaticAccessCount;
+    private Integer automaticAccessLimit;
+    private String automaticAccessResetPeriod;
+    private String automaticAccessLastReset;
+    
     // Nested person info
     private PersonInfo person;
     

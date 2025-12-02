@@ -77,31 +77,57 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   };
 
   const signIn = async (email: string, password: string): Promise<AuthResponse> => {
+    console.log('=== USER CONTEXT: SIGN IN START ===');
+    console.log('Email:', email);
     setIsLoading(true);
     try {
+      console.log('Calling authService.signIn...');
       const response = await authService.signIn({ email, password });
+      console.log('AuthService response received in UserContext:');
+      console.log('Success:', response.success);
+      console.log('Error:', response.error);
+      console.log('User present:', !!response.user);
+      
       if (response.success && response.user) {
+        console.log('Setting user in context...');
+        console.log('User object:', JSON.stringify(response.user, null, 2));
         setUser(response.user);
+        console.log('✅ User set successfully in context');
+        console.log('Navigation should trigger automatically via AppNavigator...');
         
-        // Fetch and apply user's theme preference
+        // Fetch and apply user's theme preference (non-blocking)
         try {
+          console.log('Fetching user theme...');
           const userTheme = await fetchUserTheme(response.user.id);
           if (userTheme) {
+            console.log('Applying user theme:', userTheme);
             setThemeFromUserSettings(userTheme);
+          } else {
+            console.log('No theme found for user');
           }
         } catch (error) {
-          console.error('Failed to apply user theme:', error);
+          console.error('Failed to apply user theme (non-critical):', error);
+          // Don't fail sign-in if theme fetch fails
         }
+      } else {
+        console.warn('❌ Sign in response indicates failure or missing user');
+        console.warn('Response:', JSON.stringify(response, null, 2));
       }
+      console.log('=== USER CONTEXT: SIGN IN COMPLETE ===');
       return response;
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('❌ USER CONTEXT: Sign in exception:');
+      console.error('Error:', error);
+      console.error('Error type:', error?.constructor?.name);
+      console.error('Error message:', error?.message);
+      console.error('=== USER CONTEXT: SIGN IN FAILED ===');
       return {
         success: false,
-        error: 'An unexpected error occurred during sign in',
+        error: `An unexpected error occurred during sign in: ${error?.message || 'Unknown error'}`,
       };
     } finally {
       setIsLoading(false);
+      console.log('Loading state set to false');
     }
   };
 

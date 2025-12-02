@@ -30,11 +30,23 @@ public class UserService {
     private final UserRepository userRepository;
     
     public UserResponseDto createUser(UserRequestDto requestDto) {
-        log.info("Creating user with email: {}", requestDto.getEmail());
+        log.info("Creating user with email: {} and id: {}", requestDto.getEmail(), requestDto.getId());
         
-        // Check if user already exists
+        // Check if user already exists by email
         if (userRepository.existsByEmail(requestDto.getEmail())) {
+            log.warn("User already exists with email: {}", requestDto.getEmail());
             throw UserAlreadyExistsException.withEmail(requestDto.getEmail());
+        }
+        
+        // Check if user already exists by ID (if ID is provided)
+        if (requestDto.getId() != null && !requestDto.getId().isEmpty()) {
+            if (userRepository.existsById(requestDto.getId())) {
+                log.warn("User already exists with id: {}", requestDto.getId());
+                // Return existing user instead of throwing error
+                User existingUser = userRepository.findById(requestDto.getId())
+                    .orElseThrow(() -> new RuntimeException("User exists but could not be retrieved"));
+                return convertToResponseDto(existingUser);
+            }
         }
         
         // Create new user

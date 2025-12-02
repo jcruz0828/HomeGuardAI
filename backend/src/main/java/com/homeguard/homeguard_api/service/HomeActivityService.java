@@ -37,18 +37,21 @@ public class HomeActivityService {
             .orElseThrow(() -> new RuntimeException("Home not found")));
         
         if (request.getUserId() != null) {
-            activity.setUser(userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found")));
+            // Gracefully handle missing users - set to null if not found
+            // This allows activities to be created even if the user doesn't exist in the database
+            activity.setUser(userRepository.findById(request.getUserId()).orElse(null));
         }
         
         if (request.getPersonId() != null) {
-            activity.setPerson(personRepository.findById(request.getPersonId())
-                .orElseThrow(() -> new RuntimeException("Person not found")));
+            // Gracefully handle missing persons - set to null if not found
+            // This allows activities to be created even if the person doesn't exist in the database
+            activity.setPerson(personRepository.findById(request.getPersonId()).orElse(null));
         }
         
         if (request.getDeviceId() != null) {
-            activity.setDevice(deviceRepository.findById(request.getDeviceId())
-                .orElseThrow(() -> new RuntimeException("Device not found")));
+            // Gracefully handle missing devices - set to null if not found
+            // This allows activities to be created even if the device doesn't exist in the database yet
+            activity.setDevice(deviceRepository.findById(request.getDeviceId()).orElse(null));
         }
         
         activity.setActivityType(request.getActivityType());

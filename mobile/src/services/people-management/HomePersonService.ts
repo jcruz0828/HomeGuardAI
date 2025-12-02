@@ -6,6 +6,10 @@ export interface HomePersonRequest {
   accessLevel: 'FULL_ACCESS' | 'LIMITED_HOURS' | 'WEEKDAYS_ONLY' | 'TEMPORARY' | 'EMERGENCY_ONLY';
   accessExpiresAt?: string;
   notes?: string;
+  isActive?: boolean;
+  automaticAccessEnabled?: boolean;
+  automaticAccessLimit?: number;
+  automaticAccessResetPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'NEVER';
 }
 
 export interface HomePersonResponse {
@@ -19,6 +23,11 @@ export interface HomePersonResponse {
   lastAccessed?: string;
   createdAt: string;
   updatedAt: string;
+  automaticAccessEnabled?: boolean;
+  automaticAccessCount?: number;
+  automaticAccessLimit?: number;
+  automaticAccessResetPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | 'NEVER';
+  automaticAccessLastReset?: string;
   person?: {
     id: string;
     name: string;

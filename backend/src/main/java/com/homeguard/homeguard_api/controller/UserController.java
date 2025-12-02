@@ -35,9 +35,23 @@ public class UserController {
     
     @GetMapping("/{id}")
     public ResponseEntity<UserResponseDto> getUserById(@PathVariable String id) {
+        log.info("=== GET USER BY ID REQUEST ===");
         log.info("Fetching user with id: {}", id);
+        log.info("ID length: {}", id != null ? id.length() : 0);
+        
+        try {
         UserResponseDto responseDto = userService.getUserById(id);
+            log.info("✅ User found successfully: id={}, email={}", id, responseDto.getEmail());
+            log.info("=== GET USER BY ID SUCCESS ===");
         return ResponseEntity.ok(responseDto);
+        } catch (Exception e) {
+            log.error("❌ Error fetching user with id: {}", id, e);
+            log.error("Exception type: {}", e.getClass().getName());
+            log.error("Exception message: {}", e.getMessage());
+            log.error("Stack trace:", e);
+            log.error("=== GET USER BY ID FAILED ===");
+            throw e;
+        }
     }
     
     @GetMapping("/email/{email}")

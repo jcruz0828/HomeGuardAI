@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, getApiConfig } from '../../config/api';
+import { networkRequest, parseJsonResponse } from '../../utils/networkClient';
+import { logNetworkDiagnostics } from '../../utils/networkDebugger';
 
 // Get API configuration
 const apiConfig = getApiConfig();
@@ -64,6 +66,7 @@ const SPRING_API_BASE_URL = apiConfig.SPRING_API_BASE_URL;
 class AuthService {
   private static instance: AuthService;
   private currentUser: User | null = null;
+  private _diagnosticsLogged = false;
 
   private constructor() {}
 
@@ -72,6 +75,48 @@ class AuthService {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
+  }
+
+  // React Native-compatible fetch wrapper using networkClient
+  // This prevents duplicate requests and handles timeouts properly
+  private async safeFetch(
+    url: string,
+    options: RequestInit = {},
+    timeoutMs: number = 15000
+  ): Promise<Response> {
+    try {
+      // Log network diagnostics on first call
+      if (!this._diagnosticsLogged) {
+        logNetworkDiagnostics();
+        this._diagnosticsLogged = true;
+      }
+      
+      console.log(`🌐 Fetching: ${url}`);
+      console.log(`⏱️  Timeout: ${timeoutMs}ms`);
+      
+      // Use networkClient which handles deduplication and proper timeout
+      const response = await networkRequest(url, {
+        ...options,
+        timeout: timeoutMs,
+        // Don't skip deduplication - we want to prevent double calls
+        skipDeduplication: false,
+      });
+      
+      console.log(`✅ Response status: ${response.status} ${response.statusText}`);
+      return response;
+    } catch (error: any) {
+      console.error(`❌ Fetch error for ${url}:`, error.message);
+      console.error(`❌ Error stack:`, error.stack);
+      
+      // Provide more specific error messages
+      if (error.message?.includes('timeout')) {
+        throw new Error(`Request to ${url} timed out after ${timeoutMs}ms. Check your network connection and backend status.`);
+      }
+      if (error.message?.includes('Network request failed') || error.message?.includes('Failed to fetch')) {
+        throw new Error(`Network error: Cannot reach ${url}. Ensure the backend is running at ${getApiConfig().SPRING_API_BASE_URL} and accessible from this device.`);
+      }
+      throw error;
+    }
   }
 
   // Get current user
@@ -110,7 +155,6 @@ class AuthService {
 
 
       // Step 2: Create user profile in Spring Boot backend
-      
       const userProfile = {
         id: authData.user.id,
         email: data.email,
@@ -124,29 +168,32 @@ class AuthService {
         zipCode: data.zipCode || null,
         userState: 'PENDING_VERIFICATION',
         emergencyContact: data.emergencyContact || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
       };
 
+      console.log('Creating user in Spring Boot backend:', userProfile);
 
-      const springResponse = await fetch(`${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const springResponse = await this.safeFetch(
+        `${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(userProfile),
         },
-        body: JSON.stringify(userProfile),
-      });
-
+        15000
+      );
 
       if (!springResponse.ok) {
         const errorText = await springResponse.text();
+        console.error('Spring Boot user creation failed:', {
+          status: springResponse.status,
+          statusText: springResponse.statusText,
+          error: errorText,
+        });
         
-        // If Spring Boot user creation fails, clean up Supabase user
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        
+        // Note: We can't delete Supabase user from client side (requires admin)
+        // The user will need to be cleaned up manually or via a backend cleanup job
         return {
           success: false,
-          error: 'Unable to create your account. Please try again or contact support if the problem persists.',
+          error: `Unable to create your account: ${errorText || 'Please try again or contact support'}`,
         };
       }
 
@@ -191,12 +238,11 @@ class AuthService {
       }
 
       // Step 2: Fetch user profile from Spring Boot backend
-      const springResponse = await fetch(`${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${authData.user.id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const springResponse = await this.safeFetch(
+        `${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${authData.user.id}`,
+        { method: 'GET' },
+        15000
+      );
 
       if (!springResponse.ok) {
         const errorText = await springResponse.text();
@@ -285,16 +331,17 @@ class AuthService {
         };
       }
 
-      const springResponse = await fetch(`${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${this.currentUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+      const springResponse = await this.safeFetch(
+        `${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${this.currentUser.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          }),
         },
-        body: JSON.stringify({
-          ...updates,
-          updatedAt: new Date().toISOString(),
-        }),
-      });
+        15000
+      );
 
       if (!springResponse.ok) {
         return {
@@ -326,12 +373,11 @@ class AuthService {
       
       if (session?.user) {
         // Fetch user profile from Spring Boot
-        const springResponse = await fetch(`${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${session.user.id}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
+        const springResponse = await this.safeFetch(
+          `${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${session.user.id}`,
+          { method: 'GET' },
+          15000
+        );
 
         if (springResponse.ok) {
           const springUser = await springResponse.json();
@@ -362,12 +408,11 @@ class AuthService {
       if (session?.user) {
         try {
           // Fetch user profile from Spring Boot
-          const springResponse = await fetch(`${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${session.user.id}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
+          const springResponse = await this.safeFetch(
+            `${SPRING_API_BASE_URL}${API_CONFIG.ENDPOINTS.USERS}/${session.user.id}`,
+            { method: 'GET' },
+            15000
+          );
 
           if (springResponse.ok) {
             const springUser = await springResponse.json();

@@ -16,6 +16,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useUser } from '../../contexts/UserContext';
 import { Home } from '../../types/Home';
 import { homeService, HomeResponse } from '../../services/home-management/HomeService';
+import { API_CONFIG } from '../../config/api';
+import { homeActivityService } from '../../services/home-management/HomeActivityService';
 
 interface AllHomesDevicesScreenProps {
   navigation: any;
@@ -47,6 +49,8 @@ const AllHomesDevicesScreen: React.FC<AllHomesDevicesScreenProps> = ({ navigatio
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [showCameraView, setShowCameraView] = useState(false);
   const [deviceLoading, setDeviceLoading] = useState(false);
+  const [isLocking, setIsLocking] = useState(false);
+  const [unlockCountdown, setUnlockCountdown] = useState<{ [key: string]: number }>({});
 
   // Convert API response to Home type
   const convertApiResponseToHome = useCallback((apiHome: HomeResponse): Home => {
@@ -90,82 +94,40 @@ const AllHomesDevicesScreen: React.FC<AllHomesDevicesScreenProps> = ({ navigatio
     
     setDeviceLoading(true);
     try {
-      // Mock device data - in real app, this would fetch from API
-      const mockDevices = homes.flatMap(home => [
-        // Cameras
-        {
-          id: `${home.id}-camera-1`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Front Door Camera',
-          type: 'camera' as const,
-          status: 'online' as const,
-          isOn: true,
-          location: 'Front Door',
-          lastSeen: '2 minutes ago'
-        },
-        {
-          id: `${home.id}-camera-2`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Backyard Camera',
-          type: 'camera' as const,
-          status: 'online' as const,
-          isOn: false,
-          location: 'Backyard',
-          lastSeen: '5 minutes ago'
-        },
-        // Door Locks
-        {
-          id: `${home.id}-lock-1`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Front Door Lock',
-          type: 'lock' as const,
-          status: 'online' as const,
-          isLocked: true,
-          location: 'Front Door',
-          lastSeen: '1 minute ago'
-        },
-        {
-          id: `${home.id}-lock-2`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Back Door Lock',
-          type: 'lock' as const,
-          status: 'online' as const,
-          isLocked: false,
-          location: 'Back Door',
-          lastSeen: '3 minutes ago'
-        },
-        // Lights
-        {
-          id: `${home.id}-light-1`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Living Room Light',
-          type: 'light' as const,
-          status: 'online' as const,
-          isOn: false,
-          brightness: 0,
-          location: 'Living Room',
-          lastSeen: '1 minute ago'
-        },
-        {
-          id: `${home.id}-light-2`,
-          homeId: home.id,
-          homeName: home.name,
-          name: 'Kitchen Light',
-          type: 'light' as const,
-          status: 'online' as const,
-          isOn: true,
-          brightness: 80,
-          location: 'Kitchen',
-          lastSeen: '2 minutes ago'
-        }
-      ]);
+      // Static devices for home ID: 22e0d413-bf1c-47a5-8a00-cc18d9c6abd6
+      const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+      const targetHome = homes.find(h => h.id === targetHomeId);
       
-      setAllDevices(mockDevices);
+      const devices: Device[] = [];
+      
+      if (targetHome) {
+        devices.push(
+          {
+            id: 'deadbolt-1',
+            homeId: targetHomeId,
+            homeName: targetHome.name,
+            name: 'Front Door Deadbolt',
+            type: 'lock',
+            status: 'online',
+            isLocked: false,
+            location: 'Front Door',
+            lastSeen: 'Just now'
+          },
+          {
+            id: 'camera-1',
+            homeId: targetHomeId,
+            homeName: targetHome.name,
+            name: 'Front Door Camera',
+            type: 'camera',
+            status: 'online',
+            isOn: true,
+            location: 'Front Door',
+            lastSeen: 'Just now'
+          }
+        );
+      }
+      
+      setAllDevices(devices);
     } catch (error) {
       console.error('Error loading devices:', error);
     } finally {
@@ -173,29 +135,166 @@ const AllHomesDevicesScreen: React.FC<AllHomesDevicesScreenProps> = ({ navigatio
     }
   }, [homes]);
 
+  // Fetch lock status from API
+  const fetchLockStatus = async (deviceId: string) => {
+    try {
+      const url = `${API_CONFIG.STREAM_BASE_URL}/status?key=${API_CONFIG.STREAM_SECRET_KEY}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const isLocked = data.status === 'locked' || data.status === 'Locked';
+        
+        setAllDevices(prev => prev.map(d => 
+          d.id === deviceId && d.type === 'lock'
+            ? { ...d, isLocked: isLocked, status: 'online', lastSeen: 'Just now' }
+            : d
+        ));
+      }
+    } catch (error) {
+      console.error('Error fetching lock status:', error);
+    }
+  };
+
   // Device control functions
   const handleDeviceToggle = async (deviceId: string, action: string) => {
+    const device = allDevices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    // Handle lock/unlock with 3-second countdown
+    if (device.type === 'lock') {
+      const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+      if (device.homeId !== targetHomeId) {
+        Alert.alert('Error', 'Device not available for this home');
+        return;
+      }
+
+      const isCurrentlyLocked = device.isLocked ?? true;
+      const unlockAction = isCurrentlyLocked ? 'unlock' : 'lock';
+      
+      setIsLocking(true);
+      
+      try {
+        const url = `${API_CONFIG.STREAM_BASE_URL}/unlock?key=${API_CONFIG.STREAM_SECRET_KEY}`;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          // Create activity for lock/unlock action
+          try {
+            await homeActivityService.createActivity({
+              homeId: device.homeId,
+              userId: user?.id,
+              deviceId: deviceId,
+              activityType: unlockAction === 'unlock' ? 'DOOR_OPENED' : 'DOOR_CLOSED',
+              priority: 'MEDIUM',
+              title: unlockAction === 'unlock' 
+                ? `${user?.name || 'User'} unlocked ${device.name}`
+                : `${user?.name || 'User'} locked ${device.name}`,
+              description: unlockAction === 'unlock'
+                ? `${device.name} was unlocked via mobile app. Door will auto-lock in 3 seconds.`
+                : `${device.name} was locked via mobile app.`,
+              location: device.location,
+              activityTimestamp: new Date().toISOString(),
+            });
+          } catch (activityError) {
+            console.error('Failed to create activity:', activityError);
+          }
+
+          if (unlockAction === 'unlock') {
+            setAllDevices(prev => prev.map(d => 
+              d.id === deviceId 
+                ? { ...d, isLocked: false, lastSeen: 'Just now' }
+                : d
+            ));
+            
+            setUnlockCountdown({ [deviceId]: 3 });
+            
+            const countdownInterval = setInterval(() => {
+              setUnlockCountdown(prev => {
+                const newCountdown = { ...prev };
+                if (newCountdown[deviceId] && newCountdown[deviceId] > 1) {
+                  newCountdown[deviceId] = newCountdown[deviceId] - 1;
+                  return newCountdown;
+                } else {
+                  clearInterval(countdownInterval);
+                  delete newCountdown[deviceId];
+                  return newCountdown;
+                }
+              });
+            }, 1000);
+            
+            setTimeout(async () => {
+              setAllDevices(prev => prev.map(d => 
+                d.id === deviceId 
+                  ? { ...d, isLocked: true, lastSeen: 'Just now' }
+                  : d
+              ));
+              setUnlockCountdown(prev => {
+                const newCountdown = { ...prev };
+                delete newCountdown[deviceId];
+                return newCountdown;
+              });
+              clearInterval(countdownInterval);
+              
+              // Create activity for auto-lock
+              try {
+                await homeActivityService.createActivity({
+                  homeId: device.homeId,
+                  deviceId: deviceId,
+                  activityType: 'DOOR_CLOSED',
+                  priority: 'MEDIUM',
+                  title: `${device.name} automatically locked`,
+                  description: `${device.name} automatically locked after 3 seconds.`,
+                  location: device.location,
+                  activityTimestamp: new Date().toISOString(),
+                });
+              } catch (activityError) {
+                console.error('Failed to create auto-lock activity:', activityError);
+              }
+            }, 3000);
+          } else {
+            setUnlockCountdown(prev => {
+              const newCountdown = { ...prev };
+              delete newCountdown[deviceId];
+              return newCountdown;
+            });
+            await fetchLockStatus(deviceId);
+          }
+        } else {
+          Alert.alert('Error', `Failed to ${unlockAction} door. Please try again.`);
+        }
+      } catch (error) {
+        console.error(`Error ${unlockAction}ing door:`, error);
+        Alert.alert('Error', 'Network error. Please check your connection and try again.');
+      } finally {
+        setIsLocking(false);
+      }
+      return;
+    }
+
+    // Handle other device types (camera, light)
     try {
-      // Update device state optimistically
-      setAllDevices(prev => prev.map(device => {
-        if (device.id === deviceId) {
-          switch (device.type) {
+      setAllDevices(prev => prev.map(d => {
+        if (d.id === deviceId) {
+          switch (d.type) {
             case 'camera':
-              return { ...device, isOn: action === 'on' };
-            case 'lock':
-              return { ...device, isLocked: action === 'lock' };
+              return { ...d, isOn: action === 'on' };
             case 'light':
-              return { ...device, isOn: action === 'on' };
+              return { ...d, isOn: action === 'on' };
             default:
-              return device;
+              return d;
           }
         }
-        return device;
+        return d;
       }));
 
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
       Alert.alert('Success', `Device ${action} successfully`);
     } catch (error) {
       Alert.alert('Error', 'Failed to control device');
@@ -224,6 +323,16 @@ const AllHomesDevicesScreen: React.FC<AllHomesDevicesScreenProps> = ({ navigatio
       loadAllDevices();
     }
   }, [homes, loadAllDevices]);
+
+  // Fetch lock status for devices after they're loaded
+  useEffect(() => {
+    const targetHomeId = '22e0d413-bf1c-47a5-8a00-cc18d9c6abd6';
+    const lockDevice = allDevices.find(d => d.id === 'deadbolt-1' && d.homeId === targetHomeId && d.type === 'lock');
+    if (lockDevice) {
+      fetchLockStatus('deadbolt-1').catch(console.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allDevices.length]);
 
   // Get device counts by type
   const getDeviceCounts = () => {
@@ -426,18 +535,27 @@ const AllHomesDevicesScreen: React.FC<AllHomesDevicesScreenProps> = ({ navigatio
                           )}
                           
                           {device.type === 'lock' && (
-                            <TouchableOpacity
-                              className={`p-2 rounded-lg ${
-                                device.isLocked ? 'bg-red-500' : 'bg-green-500'
-                              }`}
-                              onPress={() => handleDeviceToggle(device.id, device.isLocked ? 'unlock' : 'lock')}
-                            >
-                              <Ionicons 
-                                name={device.isLocked ? 'lock-closed' : 'lock-open'} 
-                                size={20} 
-                                color="white" 
-                              />
-                            </TouchableOpacity>
+                            <View className="flex-row items-center">
+                              {unlockCountdown[device.id] !== undefined && !device.isLocked && (
+                                <Text className={`text-xs mr-2 ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                                  {unlockCountdown[device.id]}s
+                                </Text>
+                              )}
+                              <TouchableOpacity
+                                className={`p-2 rounded-lg ${
+                                  device.isLocked ? 'bg-red-500' : 'bg-green-500'
+                                }`}
+                                onPress={() => handleDeviceToggle(device.id, device.isLocked ? 'unlock' : 'lock')}
+                                disabled={isLocking || device.status !== 'online'}
+                                style={{ opacity: (isLocking || device.status !== 'online') ? 0.5 : 1 }}
+                              >
+                                <Ionicons 
+                                  name={device.isLocked ? 'lock-closed' : 'lock-open'} 
+                                  size={20} 
+                                  color="white" 
+                                />
+                              </TouchableOpacity>
+                            </View>
                           )}
                           
                           {device.type === 'light' && (
